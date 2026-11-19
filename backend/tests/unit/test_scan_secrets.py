@@ -54,6 +54,7 @@ class TestTokenFormats:
             ("slack-token", "xo" + "xb-" + "1234567890-abcdef"),
             ("telegram-bot-token", "123456789" + ":" + "A" * 35),
             ("supabase-secret-key", "sb" + "_secret_" + "a" * 30),
+            ("supabase-access-token", "sb" + "p_" + "0f" * 20),
             ("private-key-block", "-----BEGIN " + "RSA PRIVATE KEY-----"),
             ("fernet-key-assignment", "ENCRYPTION" + "_KEY=" + "A" * 43 + "="),
         ],

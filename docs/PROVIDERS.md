@@ -87,7 +87,7 @@ Confidence: ✅ read on the vendor's own page · ⚠️ third-party sources only
 ## 7. LLM inference (per-lead budget ≈ 2–3 calls; ≈ 300–400 calls/day at ~100 sends/day)
 | Provider | Free tier | Trains on free-tier data? | Verdict |
 |---|---|---|---|
-| **Groq** | free tier, limits per account (console); remaining quota in `x-ratelimit-*` headers ✅; ≈1,000 req/day ⚠️ | no ⚠️ | ✅ primary |
+| **Groq** | **Verified on the owner's key 2026-11-19:** 1,000 requests/day and 8,000 tokens/minute **per model** (quotas are per model); remaining quota in `x-ratelimit-*` headers ✅. Models now available: `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`, `openai/gpt-oss-safeguard-20b`, `meta-llama/llama-prompt-guard-2-{22m,86m}` (all text models accept strict JSON-schema output ✅). `llama-3.3-70b-versatile` is gone. | no ⚠️ | ✅ primary — pace by TOKENS/minute, not just request count |
 | **GitHub Models** | ≈150–1,000 req/day ⚠️ | no ⚠️ | ✅ fallback |
 | **NVIDIA NIM** | ≈1,000 req/day ⚠️ | no ⚠️ | ✅ fallback |
 | **Cloudflare Workers AI** | ≈10,000 neurons/day ⚠️ | no ⚠️ | ✅ small tasks (classification) |

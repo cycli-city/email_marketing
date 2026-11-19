@@ -11,7 +11,7 @@ Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depe
 | 1b | Security baseline | ✅ | Secret scanner + hooks, nonce CSP, HTTPS/TLS enforcement, rate limiting/DoS controls, supply-chain pinning. `docs/SECURITY.md`. |
 | 1c | **No Redis** (ADR-024) | ✅ | Redis/ARQ removed everywhere; queue will be a Postgres table; rate limiter in-process. |
 | 1d | Public-readiness tooling (ADR-027) | ✅ | `scripts/prepublic_audit.py` (+ CI step), sanitised docs, personal data moved to `.local/`. |
-| 2 | Postgres job queue + provider framework + auth + Gmail | ⬜ **next** | Queue (`job_queue`, SKIP LOCKED, backoff, janitor) → ProviderManager (failover/credits) → Supabase auth with BFF cookies → Gmail OAuth. Needs Phase-2 keys. |
+| 2 | Postgres job queue + provider framework + auth + Gmail | 🚧 **started** — Supabase project + schema live, Groq verified | Queue (`job_queue`, SKIP LOCKED, backoff, janitor) → ProviderManager (failover/credits) → Supabase auth with BFF cookies → Gmail OAuth. Needs Phase-2 keys. |
 | 3 | Lead discovery (Overture/OSM/Geoapify + SSRF-guarded crawler, extraction, verification, qualification) | ⬜ | Sources in `docs/PROVIDERS.md`. |
 | 4 | Outreach (templates, generation, campaigns, sender adapters, approvals, adaptive ramp) | ⬜ | Sending architecture: ADR-025/026. |
 | 5 | Reply intelligence (sync, classify, notify, follow-ups) | ⬜ | |
@@ -47,8 +47,8 @@ Phases 2–8.
 3. Public publication (only when the owner provides the new repo + new token — ADR-027).
 
 ## Owner action checklist (agreed 2026-11-19)
-**Unblocks Phase 2 now:** (1) Supabase project → URL, anon key, service-role key, JWT secret, DB connection string (session/direct, `?sslmode=require`); (2) Groq API key; (3) NEW empty public repo (`ai-outreach-intelligence`) + NEW fine-grained token for it (Contents/Workflows/Actions read-write), then revoke the old token.
-**Long lead time (warm-up takes weeks) — start now:** (4) buy a separate sending domain (not `nexora-ai.co.in`); (5) Google Workspace Starter on it, 2 mailboxes (`divyansh@…`, `founder@…`), use them like a human for ~2 weeks; (6) tell me the domain + DNS host → I generate the exact SPF/DKIM/DMARC records; enable Google Postmaster Tools.
+**Done 2026-11-19:** Supabase project created + migrated; Groq key verified; repo made public (existing repo, ADR-027 amendment). **Still to do by the owner:** revoke the account-level Supabase token (no longer needed); optionally rotate the GitHub token; set the repo security toggles (Settings → Code security: secret scanning + push protection; Actions → Fork PR workflows: require approval for all outside collaborators).
+**Long lead time (warm-up takes weeks) — start now:** (4) buy a separate sending domain (not `nexora-ai.co.in`) — **owner will buy later; NEXORA real sending waits for it (Job Hunter can start earlier)**; (5) Google Workspace Starter on it, 2 mailboxes (`divyansh@…`, `founder@…`), use them like a human for ~2 weeks; (6) tell me the domain + DNS host → I generate the exact SPF/DKIM/DMARC records; enable Google Postmaster Tools.
 **Soon:** (7) Telegram bot token (@BotFather) + chat id; (8) Google Cloud OAuth client (one External project, "In production") once the mailboxes exist; (9) the free-tier provider keys listed in `.local/SECRETS.local.md` (no rush; asked again at Phase 3).
 **Before the first real send (Phase 4):** NEXORA postal address for footers; may "paying client" be mentioned; student vs graduated wording.
 **Phase 8:** hosting for the dashboard (Vercel Hobby is non-commercial by contract) — I will research commercial-friendly options then.
@@ -58,7 +58,7 @@ Phases 2–8.
 3. **Hosting (ADR-023):** Vercel Hobby is non-commercial by contract — decide before Phase 8.
 4. Confirm the NEXORA postal address for email footers and whether "paying client" may be mentioned.
 5. Google Drive links per role resume (promised "later").
-6. Is the owner currently a student or graduated (resume says Apr 2026)? Affects job-mail wording.
+6. ~~Student or graduate?~~ **Graduate** (confirmed 2026-11-19) — job mails describe him as a recent graduate.
 
 ## Credentials received
 GitHub token ✅ (in `.local/`, never listed here). Everything else is pending and listed, phase by phase, in `.local/SECRETS.local.md`. Real mailbox addresses/phone/postal address are in `.local/PRIVATE_CONTEXT.local.md`.

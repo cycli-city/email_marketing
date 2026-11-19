@@ -50,6 +50,8 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("slack-token", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}")),
     ("telegram-bot-token", re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b")),
     ("supabase-secret-key", re.compile(r"\bsb_secret_[A-Za-z0-9_-]{20,}")),
+    # Account-level Management API token: full control of every project on the account.
+    ("supabase-access-token", re.compile(r"\bsbp_[0-9a-f]{40}\b")),
     ("private-key-block", re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY")),
     ("fernet-key-assignment", re.compile(r"ENCRYPTION_KEY\s*[=:]\s*['\"]?[A-Za-z0-9_-]{43}=")),
     (
@@ -128,6 +130,8 @@ def load_known_secret_values(path: Path = LOCAL_SECRETS) -> set[str]:
         if not match:
             continue
         name, value = match.groups()
+        if re.search(r"anon|publishable", name, re.IGNORECASE):
+            continue  # public by design: it legitimately ships in the browser bundle
         if key_re.search(name) and len(value) >= 8 and not value.startswith(("http", "<", "(")):
             values.add(value)
     return values

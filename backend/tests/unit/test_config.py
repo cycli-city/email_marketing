@@ -185,6 +185,13 @@ class TestOptionalIntegrations:
         assert not s.google_oauth_configured
         assert not s.supabase_auth_configured
 
+    def test_default_groq_models_are_ones_that_exist_today(self) -> None:
+        """Regression: llama-3.3-70b-versatile was removed from Groq (verified live 2026-11-19)."""
+        s = make()
+        assert s.groq_model == "openai/gpt-oss-120b"
+        assert s.groq_fast_model == "openai/gpt-oss-20b"
+        assert "prompt-guard" in s.groq_guard_model
+
     def test_groq_configured_when_key_present(self) -> None:
         assert make(groq_api_key="gsk_example").groq_configured
 

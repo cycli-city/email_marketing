@@ -73,7 +73,11 @@ class Settings(BaseSettings):
 
     # ── AI ───────────────────────────────────────────────────
     groq_api_key: SecretStr | None = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"  # primary; verified 2026-11-19 (llama-3.3-70b-versatile no longer exists)
+    groq_fast_model: str = "openai/gpt-oss-20b"  # cheap classification / extraction
+    groq_guard_model: str = (
+        "meta-llama/llama-prompt-guard-2-86m"  # prompt-injection screen for untrusted text
+    )
 
     # ── Google / Gmail ───────────────────────────────────────
     google_client_id: str | None = None

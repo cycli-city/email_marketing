@@ -6,3 +6,5 @@
 2be86cf285749de2095154bfc586ba7d245ee053:backend/tests/unit/test_security.py:jwt:115
 # 3) A fixed 32-hex-digit string used as the random part of a Message-ID in the MIME builder tests (not a credential).
 e4e7dd6f50f876a142e15b01e9161ed21c9cd81e:backend/tests/unit/test_gmail_mime.py:generic-api-key:27
+# 4) A fixed hex string passed as the search token in a unit test of the Gmail client (not a credential).
+3e9c5280e2ea95355f8ec4e24109b39f6710df95:backend/tests/unit/test_gmail_api.py:generic-api-key:261

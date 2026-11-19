@@ -25,6 +25,7 @@ from tests.gmail_fake import FakeGmail, Fate, alias
 
 NOW = datetime(2026, 11, 19, 10, 0, tzinfo=UTC)
 TOKEN = "ya29.fake-access-token-for-tests"
+SOME_HEX = "0123456789abcdef"  # an arbitrary well-formed value; not a credential
 
 
 def api_and_fake(**kwargs: Any) -> tuple[GmailApi, FakeGmail]:
@@ -258,7 +259,7 @@ class TestReading:
     async def test_the_search_asks_for_sent_mail_to_that_recipient_since_a_time(self) -> None:
         api, fake = api_and_fake()
         await api.find_sent_by_token(
-            TOKEN, recipient="lead@example.org", after=NOW, aoi_token="0123456789abcdef"
+            TOKEN, recipient="lead@example.org", after=NOW, aoi_token=SOME_HEX
         )
         params = fake.requests[-1].url.params
         assert params["q"] == f"in:sent to:lead@example.org after:{int(NOW.timestamp())}"

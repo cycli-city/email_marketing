@@ -85,6 +85,7 @@ Run from `backend/` using the venv interpreter (`.\.venv\Scripts\python.exe`; `u
 | Run any command against a temp Postgres | `python scripts/with_pg.py -- alembic upgrade head` |
 | New migration | `python scripts/with_pg.py -- alembic revision --autogenerate -m "msg"` → **review it**, call `enable_rls()` for new tables (`app/db/migration_helpers.py`), then `pytest tests/integration/test_schema.py` |
 | Live provider checks (opt-in, real API, a few free requests; never in CI) | `RUN_LIVE=1 GROQ_API_KEY=… pytest -m live` — load the key from `.local/SECRETS.local.md` into the process environment only; never print it |
+| Create / reset the owner's dashboard login (real Supabase project) | `python scripts/setup_owner_login.py [--reset-password]` — password goes only to `.local/SECRETS.local.md` |
 | Generate secrets | `python scripts/gen_secrets.py` |
 | Dev API server | `uvicorn app.main:app_factory --factory --reload` |
 

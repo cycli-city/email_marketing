@@ -81,7 +81,7 @@ cd frontend && npm test && npx playwright test e2e/security.spec.ts
 
 ## 6. Known gaps / accepted risks (kept current)
 
-1. **Access-token window.** Access tokens are stateless JWTs: after sign-out (or theft of a cookie) a copied access token stays valid until it expires. The refresh token is revoked at sign-out, so it cannot be renewed; set the Supabase JWT lifetime to ≈ 15 min to bound the window. Password-only sign-in until TOTP enrolment is built (the backend's `AUTH_REQUIRE_MFA` gate is ready; the enrolment/challenge UI is not).
+1. **Access-token window.** Access tokens are stateless JWTs: after sign-out (or theft of a cookie) a copied access token stays valid until it expires. The refresh token is revoked at sign-out, so it cannot be renewed; the Supabase JWT lifetime is set to 15 min (applied 2026-11-19 by `scripts/setup_owner_login.py`), which bounds the window. Password-only sign-in until TOTP enrolment is built (the backend's `AUTH_REQUIRE_MFA` gate is ready; the enrolment/challenge UI is not).
 2. The crawler's SSRF guard, webhook verification, email-header checks and prompt-injection evals arrive with their phases.
 3. 4 moderate advisories exist in dev-only tooling (`shadcn` CLI → `ts-morph` → `minimatch` ReDoS); not shipped, not reachable at runtime.
 4. `style-src-attr 'unsafe-inline'` (inline `style=""` attributes only) is a deliberate CSP allowance; Trusted Types is a possible future tightening.

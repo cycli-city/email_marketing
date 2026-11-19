@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 
 import { signIn, type LoginState } from "./actions";
 
-const INITIAL: LoginState = { error: null };
+const INITIAL: LoginState = { error: null, email: "" };
 
 export function LoginForm({ next, notice }: { next: string; notice: string | null }) {
   const [state, formAction, pending] = useActionState(signIn, INITIAL);
@@ -23,6 +23,7 @@ export function LoginForm({ next, notice }: { next: string; notice: string | nul
           id="email"
           name="email"
           type="email"
+          defaultValue={state.email}
           autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}

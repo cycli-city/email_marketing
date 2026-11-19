@@ -10,6 +10,8 @@ import { serverSupabase } from "@/lib/auth/session";
 
 export interface LoginState {
   error: string | null;
+  /** The address that was typed, echoed back so a failed attempt does not wipe it. The password is NEVER echoed. */
+  email: string;
 }
 
 const credentials = z.object({
@@ -45,22 +47,26 @@ export async function signIn(_previous: LoginState, formData: FormData): Promise
     password: formData.get("password"),
     next: typeof formData.get("next") === "string" ? formData.get("next") : undefined,
   });
-  if (!parsed.success) return { error: "Enter your email address and password." };
+  const typed = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase()
+    .slice(0, 254);
+  if (!parsed.success) return { error: "Enter your email address and password.", email: typed };
   const { email, password, next } = parsed.data;
 
   const supabase = await serverSupabase();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data.session) {
     if (error?.status === 429)
-      return { error: "Too many attempts. Please wait a few minutes and try again." };
-    if (error?.name === "AuthRetryableFetchError") return { error: UNAVAILABLE };
-    return { error: BAD_CREDENTIALS };
+      return { error: "Too many attempts. Please wait a few minutes and try again.", email };
+    if (error?.name === "AuthRetryableFetchError") return { error: UNAVAILABLE, email };
+    return { error: BAD_CREDENTIALS, email };
   }
 
   const me = await fetchMe(data.session.access_token);
   if (me.status !== "ok") {
     await supabase.auth.signOut({ scope: "local" }); // do not keep a session for an account that may not use the app
-    return { error: REFUSALS[me.status] };
+    return { error: REFUSALS[me.status], email };
   }
 
   redirect(safeNextPath(next)); // outside any try/catch: redirect() works by throwing

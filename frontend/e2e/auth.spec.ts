@@ -103,6 +103,15 @@ test.describe("the login gate", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
+  test("a failed attempt keeps the typed email (so a typo costs one retype, not two) and never echoes the password", async ({
+    page,
+  }) => {
+    await signIn(page, OWNER.email, "definitely-not-the-password");
+    await expect(formAlert(page)).toHaveText(BAD_CREDENTIALS);
+    await expect(page.getByLabel("Email")).toHaveValue(OWNER.email);
+    await expect(page.getByLabel("Password")).toHaveValue("");
+  });
+
   test("a valid account that is not the owner is refused and its session is discarded", async ({ page }) => {
     const before = await idpState(page);
     await signIn(page, INTRUDER.email);

@@ -48,10 +48,11 @@ Phases 2–8 (auth/BFF sessions, provider failover, Gmail, discovery + SSRF guar
 2. Phase 2: provider framework (registry, manager, retry engine, usage/credit tracking, failover) with mock providers → Groq adapter → queue abstraction + ARQ worker skeleton → Supabase auth with BFF cookie sessions (needs Supabase keys) → Gmail OAuth + token store (needs Google OAuth client).
 
 ## Open questions for the owner (ask only when blocking)
-1. Which mode does `divyanshkhanna1729@gmail.com` send — NEXORA, Job Hunter, or both? (My schema ties one mailbox to one mode; tell me if you want one Gmail for both and I'll adjust.)
+1. ~~Sender identities~~ **answered 2026-11-19** (ADR-021): NEXORA = `founder@nexora-ai.co.in` (routed to the 256 Gmail, sent via Gmail alias); Job Hunter (jobs + part-time + freelance) = `divyanshkhanna1729@gmail.com`.
+1b. **Hosting decision (ADR-023):** Vercel Hobby is contractually non-commercial and Render free says "not for production" — decide before Phase 8 (Vercel Pro vs another host vs accept the risk).
 2. Confirm NEXORA postal address in footer (Amritsar address from the public site) and whether "paying client" may be mentioned in outreach.
 3. Google Drive links per role resume (promised "later").
 4. Is the owner currently a student or graduated (resume says Apr 2026)? Affects job-mail wording.
 
 ## Credentials received
-GitHub token ✅ (in `.local/`, never listed here). Pending: Supabase, Render, Vercel (+bypass secret), Groq, Google OAuth, Redis. Sender Gmail address received.
+GitHub token ✅ (in `.local/`, never listed here). Pending: Supabase, Render, Vercel (+bypass secret), Groq, Google OAuth, Redis, plus the free-tier provider keys listed at the end of `docs/PROVIDERS.md` (requested per phase). Sender addresses received and mapped to modes.

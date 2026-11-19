@@ -31,6 +31,8 @@ This document is part of the definition of done — update it when a control cha
 | 17 | **Supply chain** | Actions pinned to **commit SHAs**; `uv.lock` + `package-lock.json`; hash-verified `pip-audit`, `npm audit` (prod tree); Dependabot; pinned+checksummed binaries; `persist-credentials: false`; build-only tooling kept out of the shipped tree | CI gates | ✅ |
 | 18 | **Stolen GitHub token** | Fine-grained, single-repo scope; stored only in `.local/`; passed to git via environment (never argv or `.git/config`); header never logged; recommend expiry + rotation | `scripts/github.py`, config check | ✅ / ⚠️ token was pasted in chat — rotate when convenient |
 | 19 | **Accidental sends / abuse of the tool itself** | Approval mode default; central suppression; kill switch; compliance gate; exactly-once send protocol | Phases 4–5 | 🟡 |
+| 20 | **Over-collection of personal mail** (the connected mailboxes also hold private email; `gmail.readonly` can technically read all of it) | Inbox scope guard (ADR-021): process only messages in threads we started or that reference our `Message-ID`; never forward unrelated mail to an LLM or store it; owner-visible audit of what was read; one-click disconnect revokes the token | Phase 5 tests | 🟡 |
+| 21 | **Third-party data/ToS exposure** (free-tier LLMs may train on inputs; search APIs forbid storing results) | Per-provider "may receive personal data" flag in `docs/PROVIDERS.md` / `ProviderSpec`; personal data routed only to providers cleared for it; Brave results treated as transient | Phase 2–3 contract tests | 🟡 |
 
 ## 2. Transport security (HTTPS everywhere)
 

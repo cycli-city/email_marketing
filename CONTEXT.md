@@ -33,13 +33,17 @@ Facts below were read from the public site `https://www.nexora-ai.co.in` on 2026
 
 ### Mode B — JOB HUNTER (finding roles / recruiters for the owner)
 - Target roles: **Software Engineer, AI Engineer, Python Developer, Full-Stack, Backend, Frontend** (+ Automation Engineer, others configurable).
+- Opportunity types (owner, 2026-11-19): **jobs, part-time and freelance** — the same Job Hunter mode and mailbox serves all three.
 - The owner keeps **a separate resume per role**, each hosted on **Google Drive** — links will be provided later. Design decision: a `resume_assets` table (`role_key`, `label`, `drive_url`, `file_id`, `is_default`); outreach picks the right variant per target role and includes the **link in the email body** (optionally attaches the file via Drive download if the owner wants). Until links arrive, the system must refuse to send job mails that need a CV and say why (no fake links).
 - A **general resume** was uploaded: facts distilled into `docs/profile/RESUME_PROFILE.md`. It is the ONLY source of "personal experience" the email generator may cite.
 - Separate sender identity, templates, categories and campaign data from NEXORA (hard requirement).
 
-## 3. Sender identities (to be confirmed with owner when needed)
-- Open question: which Gmail address(es) send NEXORA mails vs Job Hunter mails (separate identities required). Default plan: **two connected Gmail accounts** (one per mode), each with its own limits/warm-up. Never rotate accounts to dodge limits.
-- Open question: custom domain mailbox for NEXORA (e.g. `name@nexora-ai.co.in`)? If yes, SPF/DKIM/DMARC guidance + Google Workspace or Brevo/Resend path applies.
+## 3. Sender identities (owner-confirmed 2026-11-19 — see ADR-021)
+- **NEXORA mode** → From **`founder@nexora-ai.co.in`**. That address has email routing to **`divyanshkhanna256@gmail.com`** (so prospects' replies land in the 256 mailbox). The NEXORA connected account is the 256 mailbox + a verified Gmail "Send mail as" alias for the founder address. **Replies, follow-ups and owner-approved responses for NEXORA all go out as `founder@nexora-ai.co.in`**, in the same thread, and open with context: *"Hi <name>, Divyansh here, founder of NEXORA — you showed interest in …"* (anchored on the prospect's own words).
+- **Job Hunter mode** → **`divyanshkhanna1729@gmail.com`**, for **jobs plus part-time and freelance opportunities** (targeting gets an `opportunity_type`: full-time | part-time | freelance | contract; freelance has its own template).
+- Never rotate or fail over between mailboxes to dodge limits. Both mailboxes also contain personal mail → the system touches only threads it started (inbox scope guard, ADR-021).
+- Deliverability of alias sending (SPF/DKIM/DMARC alignment for `nexora-ai.co.in`) is **tested before any real campaign**; fallback is Resend with a domain-authenticated sender (ADR-021 §e). Needs DNS access to the domain when we get there.
+- **Free-credit strategy (owner, 2026-11-19):** use every legitimate free tier across many *different* providers; never multiple accounts/keys at one provider (ADR-022, `docs/PROVIDERS.md`).
 
 ## 4. Dev machine facts (Windows 11, inspected 2026-11-19)
 - Present: Node v24.15, npm 11.12, Python 3.11.9 (Microsoft Store build), git 2.54, winget 1.30. 16 GB RAM, ~52 GB free.

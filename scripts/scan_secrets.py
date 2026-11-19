@@ -154,7 +154,8 @@ def scan_line(
             yield Finding(where, lineno, f"jwt(role={role})", redact(m.group(0)))
     for secret in known:
         if secret in line:
-            yield Finding(where, lineno, "known-local-secret-value", redact(secret))
+            # Reveal nothing but the length: a short password's first characters are a large part of it.
+            yield Finding(where, lineno, "known-local-secret-value", f"<{len(secret)} chars, value hidden>")
 
 
 def scan_text(where: str, text: str, **kw: object) -> list[Finding]:

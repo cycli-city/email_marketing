@@ -111,6 +111,12 @@ class TestKnownLocalSecrets:
         found = rules("config = 'Hunter2-Strong!'", known={"Hunter2-Strong!"})
         assert "known-local-secret-value" in found
 
+    def test_known_values_are_never_echoed_not_even_a_prefix(self) -> None:
+        (finding,) = ss.scan_text("f", "pw = 'Hunter2-Strong!'", known={"Hunter2-Strong!"})
+        rendered = str(finding)
+        assert "Hunt" not in rendered
+        assert "Hunter2-Strong!" not in rendered
+
     def test_missing_file_yields_empty_set(self, tmp_path: Path) -> None:
         assert ss.load_known_secret_values(tmp_path / "nope.md") == set()
 

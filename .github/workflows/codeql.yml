@@ -1,5 +1,9 @@
 name: CodeQL
 
+# Code scanning is free only for PUBLIC repositories (private repos need GitHub Advanced Security).
+# While this repo is private the job is skipped; it activates automatically if the repo ever goes public.
+# Meanwhile static analysis runs in CI through ruff's bandit rules (S), mypy --strict, semgrep and dependency audits.
+
 on:
   push:
     branches: [main]
@@ -14,6 +18,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
+    if: ${{ github.event.repository.private == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:

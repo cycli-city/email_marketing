@@ -1,0 +1,13 @@
+#!/bin/sh
+# Blocks commits that contain credentials. Enabled by: git config core.hooksPath .githooks
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+
+PY="$ROOT/backend/.venv/Scripts/python.exe"
+[ -x "$PY" ] || PY="$ROOT/backend/.venv/bin/python"
+[ -x "$PY" ] || PY="$(command -v python3 || command -v python)"
+
+"$PY" scripts/scan_secrets.py --staged || {
+  echo "pre-commit: commit blocked — secrets detected (see above)." >&2
+  exit 1
+}

@@ -4,3 +4,5 @@
 1101fd895cbb5c9ac1fd10ed00de735ebfc4e0fa:backend/tests/unit/test_scan_secrets.py:generic-api-key:102
 # 2) A JWT with `"alg":"none"` and an empty signature, used to prove that unsigned tokens are REJECTED.
 2be86cf285749de2095154bfc586ba7d245ee053:backend/tests/unit/test_security.py:jwt:115
+# 3) A fixed 32-hex-digit string used as the random part of a Message-ID in the MIME builder tests (not a credential).
+e4e7dd6f50f876a142e15b01e9161ed21c9cd81e:backend/tests/unit/test_gmail_mime.py:generic-api-key:27

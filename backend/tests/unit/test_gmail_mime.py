@@ -24,7 +24,7 @@ from app.integrations.gmail.mime import (
 )
 
 NOW = datetime(2026, 11, 19, 10, 0, tzinfo=UTC)
-TOKEN = "0123456789abcdef0123456789abcdef"
+ID_LOCAL_PART = "0123456789abcdef0123456789abcdef"
 
 
 def email(**overrides: object) -> OutboundEmail:
@@ -34,7 +34,7 @@ def email(**overrides: object) -> OutboundEmail:
         "subject": "A quick idea for Acme",
         "body_text": "Hi Pat,\n\nA short note.\n\nDivyansh",
         "sent_at": NOW,
-        "message_id": f"<{TOKEN}@example.com>",
+        "message_id": f"<{ID_LOCAL_PART}@example.com>",
     }
     base.update(overrides)
     return OutboundEmail(**base)  # type: ignore[arg-type]
@@ -53,8 +53,8 @@ class TestHeaders:
     def test_sets_our_identifiers_and_the_standard_headers(self) -> None:
         built = build_message(email())
         msg = parse(built.raw)
-        assert msg["Message-ID"] == f"<{TOKEN}@example.com>" == built.rfc_message_id
-        assert msg["X-AOI-Message"] == TOKEN
+        assert msg["Message-ID"] == f"<{ID_LOCAL_PART}@example.com>" == built.rfc_message_id
+        assert msg["X-AOI-Message"] == ID_LOCAL_PART
         assert msg["From"] == "Divyansh K <founder@example.com>"
         assert msg["To"] == "Pat Lead <lead@example.org>"
         assert msg["Subject"] == "A quick idea for Acme"
@@ -73,7 +73,9 @@ class TestHeaders:
             build_message(email(sent_at=datetime(2026, 11, 19, 10, 0)))
 
     def test_message_id_uses_the_sender_domain_lowercased(self) -> None:
-        assert message_id_for(TOKEN, "Founder@Example.COM") == f"<{TOKEN}@example.com>"
+        assert (
+            message_id_for(ID_LOCAL_PART, "Founder@Example.COM") == f"<{ID_LOCAL_PART}@example.com>"
+        )
 
     def test_non_ascii_text_is_encoded_not_mangled(self) -> None:
         built = build_message(

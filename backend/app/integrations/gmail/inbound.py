@@ -71,6 +71,9 @@ _AUTO_SUBJECT = re.compile(
     re.IGNORECASE,
 )
 _BOUNCE_SENDERS = {"mailer-daemon", "postmaster"}
+_AOI_TOKEN = re.compile(
+    r"^X-AOI-Message:[ \t]*([A-Za-z0-9]{8,64})[ \t]*$", re.IGNORECASE | re.MULTILINE
+)
 _STATUS_CODE = re.compile(r"\b([245])\.(\d{1,3})\.(\d{1,3})\b")
 _FINAL_RECIPIENT = re.compile(r"^Final-Recipient:\s*[\w-]+;\s*(\S+)", re.IGNORECASE | re.MULTILINE)
 _ORIGINAL_RECIPIENT = re.compile(
@@ -93,6 +96,9 @@ class Dsn:
     status: str | None  # e.g. "5.1.1"
     hard: bool
     original_message_ids: tuple[str, ...]
+    #: ``X-AOI-Message`` values quoted from the bounced message's headers — Gmail rewrites the Message-ID on send, but
+    #: keeps this one, so it is how a bounce is tied back to the message we sent.
+    original_tokens: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,12 +334,15 @@ def parse_dsn(payload: dict[str, Any], headers: dict[str, str]) -> Dsn | None:
     """Read a delivery-status notification. ``None`` if the message does not actually contain one."""
     status_text = ""
     original_ids: list[str] = []
+    original_tokens: list[str] = []
     for part in walk(payload):
         mime = str(part.get("mimeType", "")).lower()
         if mime == "message/delivery-status":
             status_text += "\n" + _decode(part) + _nested_text(part)
         elif mime in {"message/rfc822", "text/rfc822-headers"}:
-            original_ids.extend(_ids(_decode(part) + _nested_text(part)))
+            quoted = _decode(part) + _nested_text(part)
+            original_ids.extend(_ids(quoted))
+            original_tokens.extend(_AOI_TOKEN.findall(quoted))
     failed = _first(_FINAL_RECIPIENT, status_text) or _first(_ORIGINAL_RECIPIENT, status_text)
     if not failed:
         failed = (headers.get("x-failed-recipients", "").split(",")[0].strip()) or None
@@ -341,7 +350,7 @@ def parse_dsn(payload: dict[str, Any], headers: dict[str, str]) -> Dsn | None:
     if status is None:
         match = _STATUS_CODE.search(_all_text(payload))
         status = match.group(0) if match else None
-    if not (failed or status or original_ids):
+    if not (failed or status or original_ids or original_tokens):
         return None
     action = (_first(_ACTION_LINE, status_text) or "").lower()
     return Dsn(
@@ -349,6 +358,7 @@ def parse_dsn(payload: dict[str, Any], headers: dict[str, str]) -> Dsn | None:
         status=status,
         hard=_is_hard(status, action),
         original_message_ids=tuple(dict.fromkeys(original_ids)),
+        original_tokens=tuple(dict.fromkeys(original_tokens)),
     )
 
 

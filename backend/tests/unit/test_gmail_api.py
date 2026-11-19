@@ -197,27 +197,89 @@ class TestClassification:
 
 
 class TestReading:
-    async def test_find_by_rfc_message_id_finds_exactly_our_message(self) -> None:
+    async def test_gmail_replaces_the_message_id_but_keeps_our_token(self) -> None:
+        """The fact the whole reconciler rests on — observed on a real mailbox, reproduced by the fake."""
+        api, _fake = api_and_fake()
+        message = built()
+        sent = await api.send(TOKEN, message.raw)
+        ref = await api.get_message_ref(TOKEN, sent.id)
+        assert ref.message_id_header != message.rfc_message_id  # Gmail rewrote it
+        assert ref.message_id_header is not None
+        assert ref.message_id_header.endswith("@mail.example.org>")
+        assert ref.aoi_token == message.rfc_message_id[1:].split("@")[0]  # our header survived
+
+    async def test_our_message_is_found_by_recipient_time_and_token(self) -> None:
         api, fake = api_and_fake()
         message = built()
-        await api.send(TOKEN, message.raw)
-        found = await api.find_by_rfc_message_id(TOKEN, message.rfc_message_id)
-        assert [f.id for f in found] == [fake.stored[0].id]
-        assert await api.find_by_rfc_message_id(TOKEN, "<someone-else@example.com>") == []
+        sent = await api.send(TOKEN, message.raw)
+        found = await api.find_sent_by_token(
+            TOKEN,
+            recipient="lead@example.org",
+            after=NOW - timedelta(minutes=5),
+            aoi_token=message.rfc_message_id[1:].split("@")[0],
+        )
+        assert [f.id for f in found] == [sent.id]
+        assert found[0].internal_date == NOW
+        assert found[0].message_id_header == fake.stored[0].rfc_id
 
-    async def test_the_search_query_is_the_bare_id(self) -> None:
+    async def test_another_message_to_the_same_recipient_is_not_mistaken_for_ours(self) -> None:
+        api, _ = api_and_fake()
+        ours, other = (
+            built("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+            built("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        )
+        await api.send(TOKEN, other.raw)
+        await api.send(TOKEN, ours.raw)
+        found = await api.find_sent_by_token(
+            TOKEN,
+            recipient="lead@example.org",
+            after=NOW - timedelta(minutes=5),
+            aoi_token="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        assert len(found) == 1
+        assert found[0].aoi_token == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+    async def test_mail_sent_before_the_window_or_to_someone_else_is_not_a_candidate(self) -> None:
+        api, _fake = api_and_fake()
+        message = built()
+        await api.send(TOKEN, message.raw)
+        token = message.rfc_message_id[1:].split("@")[0]
+        later = await api.find_sent_by_token(
+            TOKEN, recipient="lead@example.org", after=NOW + timedelta(minutes=1), aoi_token=token
+        )
+        elsewhere = await api.find_sent_by_token(
+            TOKEN,
+            recipient="someone.else@example.org",
+            after=NOW - timedelta(minutes=5),
+            aoi_token=token,
+        )
+        assert (later, elsewhere) == ([], [])
+
+    async def test_the_search_asks_for_sent_mail_to_that_recipient_since_a_time(self) -> None:
         api, fake = api_and_fake()
-        await api.find_by_rfc_message_id(TOKEN, "<abc123@example.com>")
-        assert fake.requests[-1].url.params["q"] == "rfc822msgid:abc123@example.com"
-        assert fake.requests[-1].url.params["includeSpamTrash"] == "true"
+        await api.find_sent_by_token(
+            TOKEN, recipient="lead@example.org", after=NOW, aoi_token="0123456789abcdef"
+        )
+        params = fake.requests[-1].url.params
+        assert params["q"] == f"in:sent to:lead@example.org after:{int(NOW.timestamp())}"
+        assert params["includeSpamTrash"] == "true"
 
     @pytest.mark.parametrize(
-        "bad", ["<a b@example.com>", "<x@example.com> OR in:inbox", "<>", "<a@example.com\nBcc: x>"]
+        ("recipient", "token"),
+        [
+            ("lead@example.org OR in:inbox", "0123456789abcdef"),
+            ("lead@example.org\nBcc: x@example.net", "0123456789abcdef"),
+            ("not an address", "0123456789abcdef"),
+            ("lead@example.org", "short"),
+            ("lead@example.org", "has space in it 12345"),
+        ],
     )
-    async def test_a_malformed_message_id_is_never_put_in_a_query(self, bad: str) -> None:
+    async def test_nothing_malformed_is_ever_put_in_a_query(
+        self, recipient: str, token: str
+    ) -> None:
         api, fake = api_and_fake()
         with pytest.raises(PermanentProviderError):
-            await api.find_by_rfc_message_id(TOKEN, bad)
+            await api.find_sent_by_token(TOKEN, recipient=recipient, after=NOW, aoi_token=token)
         assert fake.requests == []
 
     async def test_the_stored_time_comes_from_gmail(self) -> None:

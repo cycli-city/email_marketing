@@ -53,7 +53,13 @@ class Stored:
 
     @property
     def rfc_id(self) -> str:
+        """The Message-ID header as Gmail stored it (NOT the one the sender asked for: Gmail replaces it)."""
         return str(self.message["Message-ID"])
+
+    @property
+    def token(self) -> str:
+        """Our X-AOI-Message header, which Gmail keeps."""
+        return str(self.message["X-AOI-Message"])
 
 
 @dataclass
@@ -87,7 +93,9 @@ class FakeGmail:
         return [r for r in self.requests if r.url.path.endswith("/messages/send")]
 
     def copies_of(self, rfc_id: str) -> int:
-        return sum(1 for s in self.stored if s.rfc_id == rfc_id)
+        """How many copies of OUR message exist, found the only way that works: by our own token."""
+        token = rfc_id.removeprefix("<").split("@", 1)[0]
+        return sum(1 for s in self.stored if s.token == token)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -127,6 +135,9 @@ class FakeGmail:
             message=message_from_bytes(raw, policy=default),
             raw=raw,
         )
+        # Real Gmail replaces the Message-ID of every message sent through the API; custom headers are kept.
+        del stored.message["Message-ID"]
+        stored.message["Message-ID"] = f"<CAB8WC={self._counter:04d}fake@mail.example.org>"
         self.stored.append(stored)
         self._event(stored.id, stored.thread_id)
         return stored
@@ -150,11 +161,19 @@ class FakeGmail:
         )
 
     def _search(self, q: str) -> httpx.Response:
-        match = re.fullmatch(r"rfc822msgid:(\S+)", q)
-        if not match:
+        found: list[Stored]
+        if match := re.fullmatch(r"rfc822msgid:(\S+)", q):
+            found = [s for s in self.stored if s.rfc_id == f"<{match.group(1)}>"]
+        elif match := re.fullmatch(r"in:sent to:(\S+) after:(\d+)", q):
+            recipient, after = match.group(1).lower(), int(match.group(2))
+            found = [
+                s
+                for s in self.stored
+                if s.message["To"].addresses[0].addr_spec.lower() == recipient
+                and s.internal_ms // 1000 >= after
+            ]
+        else:
             return _error(400, "unsupported query", "invalidArgument")
-        wanted = f"<{match.group(1)}>"
-        found = [s for s in self.stored if s.rfc_id == wanted]
         body: dict[str, Any] = {"resultSizeEstimate": len(found)}
         if found:
             body["messages"] = [{"id": s.id, "threadId": s.thread_id} for s in found]
@@ -169,6 +188,12 @@ class FakeGmail:
             return self._inbound(inbound, fmt, query.get("metadataHeaders", []))
         for s in self.stored:
             if s.id == message_id:
+                wanted = {w.lower() for w in query.get("metadataHeaders", [])}
+                headers = [
+                    {"name": name, "value": str(value)}
+                    for name, value in s.message.items()
+                    if not wanted or name.lower() in wanted
+                ]
                 return httpx.Response(
                     200,
                     json={
@@ -176,6 +201,7 @@ class FakeGmail:
                         "threadId": s.thread_id,
                         "internalDate": str(s.internal_ms),
                         "labelIds": ["SENT"],
+                        "payload": {"mimeType": "text/plain", "headers": headers},
                     },
                 )
         return _error(404, "Requested entity was not found.", "notFound")

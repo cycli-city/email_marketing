@@ -56,14 +56,30 @@ class Conversation:
         return str((await self.sent()).gmail_thread_id)
 
     async def rfc_id(self) -> str:
-        return str((await self.sent()).rfc_message_id)
+        # What a reply's In-Reply-To quotes: the id Gmail assigned (it replaces the one we generated).
+        return str((await self.sent()).sent_message_id)
 
     async def replies(self) -> list[IncomingReply]:
         return list(await self.world.all(IncomingReply))
 
 
-def dsn_payload(*, failed: str, status: str, action: str, original: str) -> dict[str, Any]:
-    status_text = f"Reporting-MTA: dns; googlemail.com\n\nFinal-Recipient: rfc822; {failed}\nAction: {action}\nStatus: {status}\n"
+def quoted_headers(message_id: str | None, token: str | None) -> str:
+    """The original message's headers as a bounce notice quotes them."""
+    lines = ["Subject: A quick idea"]
+    if message_id:
+        lines.insert(0, f"Message-ID: {message_id}")
+    if token:
+        lines.append(f"X-AOI-Message: {token}")
+    return "\n".join(lines) + "\n"
+
+
+def dsn_payload(
+    *, failed: str, status: str, action: str, original: str | None, token: str | None = None
+) -> dict[str, Any]:
+    status_text = (
+        f"Reporting-MTA: dns; mail.example.org\n\nFinal-Recipient: rfc822; {failed}\n"
+        f"Action: {action}\nStatus: {status}\n"
+    )
     return {
         "mimeType": "multipart/report",
         "filename": "",
@@ -75,11 +91,7 @@ def dsn_payload(*, failed: str, status: str, action: str, original: str) -> dict
                 "mimeType": "message/rfc822",
                 "filename": "",
                 "body": {},
-                "parts": [
-                    text_part(
-                        "text/rfc822-headers", f"Message-ID: {original}\nSubject: A quick idea\n"
-                    )
-                ],
+                "parts": [text_part("text/rfc822-headers", quoted_headers(original, token))],
             },
         ],
     }
@@ -377,7 +389,8 @@ class TestBounces:
                 failed=failed or sent.to_email,
                 status=status,
                 action=action,
-                original=sent.rfc_message_id,
+                original=sent.sent_message_id,
+                token=sent.rfc_message_id[1:].split("@")[0],
             ),
         )
 
@@ -419,6 +432,46 @@ class TestBounces:
         convo = await Conversation.start(world)
         await self.deliver_bounce(convo, failed="innocent.bystander@example.net")
         await world.poll(convo.account_id)
+        assert await world.all(SuppressionEntry) == []
+
+    async def test_a_bounce_is_matched_by_our_own_header_even_when_the_message_id_is_not_quoted(
+        self, world: World
+    ) -> None:
+        """Gmail replaces the Message-ID, so our X-AOI-Message header is the reliable link back to our message."""
+        convo = await Conversation.start(world)
+        sent = await convo.sent()
+        world.gmail.deliver(
+            sender=MAILER_DAEMON["From"],
+            thread_id="bounce-thread",
+            headers={"Content-Type": MAILER_DAEMON["Content-Type"]},
+            payload=dsn_payload(
+                failed=sent.to_email,
+                status="5.1.1",
+                action="failed",
+                original=None,
+                token=sent.rfc_message_id[1:].split("@")[0],
+            ),
+        )
+        report = await world.poll(convo.account_id)
+        assert (report.stored, report.bounces) == (1, 1)
+        assert (await convo.sent()).bounce_kind == "hard"
+
+    async def test_a_bounce_quoting_a_different_token_is_not_ours(self, world: World) -> None:
+        convo = await Conversation.start(world)
+        world.gmail.deliver(
+            sender=MAILER_DAEMON["From"],
+            thread_id="forged-2",
+            headers={"Content-Type": MAILER_DAEMON["Content-Type"]},
+            payload=dsn_payload(
+                failed="victim@example.net",
+                status="5.1.1",
+                action="failed",
+                original=None,
+                token="ffffffffffffffffffffffffffffffff",
+            ),
+        )
+        report = await world.poll(convo.account_id)
+        assert (report.stored, report.ignored) == (0, 1)
         assert await world.all(SuppressionEntry) == []
 
     async def test_a_forged_bounce_that_does_not_quote_our_message_is_ignored(

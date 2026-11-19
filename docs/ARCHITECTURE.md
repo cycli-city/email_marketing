@@ -104,7 +104,7 @@ Companies keyed by normalised registrable domain (+ name/location fuzzy for site
 4. Build MIME with our own `Message-ID` (`<{uuid}@{sender-domain}>`) and header `X-AOI-Message: {uuid}`; add `List-Unsubscribe` (+ `List-Unsubscribe-Post: List-Unsubscribe=One-Click`), sender identification, postal address footer where required.
 5. Call Gmail `users.messages.send` (threading: `threadId` + `In-Reply-To`/`References` for follow-ups).
 6. On **success** → `SENT`, store `gmail_message_id`, `thread_id`, timestamps. On **definite failure** (4xx validation) → `FAILED` with reason. On **ambiguous failure** (timeout/connection reset/5xx after the request may have been accepted) → `SEND_UNCERTAIN`, **never retried blindly**.
-7. A **reconciler** resolves `SEND_UNCERTAIN` (and any `SENDING` past lease) by querying Gmail Sent for `rfc822msgid:<our id>`: found ⇒ mark `SENT`; not found after a safe settle window ⇒ move back to `QUEUED` (one more attempt, same Message-ID).
+7. A **reconciler** resolves `SEND_UNCERTAIN` (and any `SENDING` past lease) by searching the mailbox's Sent folder for mail to the same recipient since shortly before the claim and keeping the messages that carry **our own `X-AOI-Message` token** (found ⇒ mark `SENT`, recording the Message-ID Gmail assigned and Gmail's own timestamp; not found after a safe settle window ⇒ back to `QUEUED`, at most one more attempt). *Gmail replaces the `Message-ID` header of every message sent through its API (observed on a real mailbox, ADR-035 correction), so a search for the id we generated can never succeed — the custom header is what survives.*
 Tests simulate crash after claim, crash after provider accept, and timeouts, asserting exactly one send.
 
 ## 6. Reply intelligence

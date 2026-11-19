@@ -61,6 +61,20 @@ class TestSending:
         assert row.attempt_count == 1
         assert world.copies(row) == 1
 
+    async def test_a_message_id_that_cannot_be_read_back_does_not_undo_a_successful_send(
+        self, world: World
+    ) -> None:
+        account_id = await world.account()
+        message_id = await world.message(account_id)
+        world.gmail.fail_ids = {"msg0001"}  # reading the message back fails; the send itself worked
+
+        result = await world.send(message_id)
+
+        assert result.outcome == SendOutcome.SENT
+        row = await world.row(message_id)
+        assert (row.status, row.sent_message_id) == (MessageStatus.SENT, None)
+        assert len(world.gmail.sends()) == 1
+
     async def test_the_gate_runs_after_the_claim(self, world: World) -> None:
         account_id = await world.account()
         await world.send(await world.message(account_id))
@@ -74,7 +88,9 @@ class TestSending:
 
         row = await world.row(message_id)
         wire = world.gmail.stored[0].message
-        assert wire["Message-ID"] == row.rfc_message_id
+        # Gmail replaces the Message-ID of every message it sends; we record the one it assigned.
+        assert wire["Message-ID"] != row.rfc_message_id
+        assert row.sent_message_id == wire["Message-ID"]
         assert wire["X-AOI-Message"] == row.rfc_message_id[1:].split("@")[0]
         assert str(wire["From"]) == account.email_address
         assert wire["To"] == "Pat Lead <" + row.to_email + ">"
@@ -116,8 +132,10 @@ class TestSending:
 
         wire = world.gmail.stored[1]
         assert wire.thread_id == first_row.gmail_thread_id  # sent into the same Gmail thread
-        assert wire.message["In-Reply-To"] == first_row.rfc_message_id
-        assert wire.message["References"] == first_row.rfc_message_id
+        # The recipient's mail client knows the first message by the id Gmail assigned, so that is what we reference.
+        assert first_row.sent_message_id == world.gmail.stored[0].rfc_id
+        assert wire.message["In-Reply-To"] == first_row.sent_message_id
+        assert wire.message["References"] == first_row.sent_message_id
         (thread,) = await world.all(EmailThread)
         assert thread.message_count == 2
         assert (await world.row(follow)).thread_id == thread.id
@@ -592,6 +610,41 @@ class TestReconciler:
         assert world.copies(row) == 1
         assert len(world.gmail.sends()) == 1
         assert (await world.all(EmailThread))[0].message_count == 1
+
+    async def test_reconciling_records_the_message_id_gmail_assigned(self, world: World) -> None:
+        account_id = await world.account()
+        message_id = await world.message(account_id)
+        world.gmail.script.append(Fate.ACCEPT_THEN_TIMEOUT)
+        await world.send(message_id)
+        world.clock.advance(minutes=1)
+        await world.reconcile()
+        row = await world.row(message_id)
+        assert row.sent_message_id == world.gmail.stored[0].rfc_id
+        assert row.sent_message_id != row.rfc_message_id
+
+    async def test_another_message_to_the_same_recipient_is_never_mistaken_for_the_lost_one(
+        self, world: World
+    ) -> None:
+        """Two messages to one person in the same window: only the one carrying OUR token counts as ours."""
+        account_id = await world.account()
+        shared = "same.person@example.org"
+        went_out = await world.message(account_id, to_email=shared)
+        lost = await world.message(account_id, to_email=shared)
+        world.gmail.script.extend([Fate.ACCEPT_THEN_TIMEOUT, Fate.REJECT_503])
+        await world.send(went_out)  # reached Gmail, answer lost
+        await world.send(lost)  # never reached Gmail
+        world.clock.advance(seconds=SETTLE.total_seconds() + 1)
+
+        report = await world.reconcile()
+
+        assert (report.confirmed_sent, report.requeued) == (1, 1)
+        assert (await world.row(went_out)).status == MessageStatus.SENT
+        assert (
+            await world.row(lost)
+        ).status == MessageStatus.QUEUED  # not wrongly "confirmed" by the other mail
+        assert (await world.send(lost)).outcome == SendOutcome.SENT
+        assert world.copies(await world.row(lost)) == 1
+        assert world.copies(await world.row(went_out)) == 1
 
     async def test_an_unconfirmed_send_that_did_not_go_out_is_retried_once_after_the_settle_window(
         self, world: World

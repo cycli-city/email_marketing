@@ -25,7 +25,7 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -281,7 +281,7 @@ class InboxSync:
         env = envelope(await self._gmail.get_message(box.token, message_id))
         if env.is_own or env.from_email == box.address:
             return _Verdict("own")
-        original = await self._sent_by_rfc_id(box.workspace_id, env.referenced_ids)
+        original = await self._sent_by_message_ids(box.workspace_id, env.referenced_ids)
         if original is not None:
             full = await self._gmail.get_message(box.token, message_id, full=True)
             return _Verdict(
@@ -292,8 +292,12 @@ class InboxSync:
         if env.looks_like_dsn:
             full = await self._gmail.get_message(box.token, message_id, full=True)
             dsn = parse(full).dsn
-            bounced = await self._sent_by_rfc_id(
-                box.workspace_id, dsn.original_message_ids if dsn else ()
+            bounced = (
+                await self._sent_by_message_ids(
+                    box.workspace_id, dsn.original_message_ids, dsn.original_tokens
+                )
+                if dsn
+                else None
             )
             if bounced is not None:
                 return _Verdict(
@@ -361,19 +365,31 @@ class InboxSync:
                 )
             ).scalar_one_or_none()
 
-    async def _sent_by_rfc_id(
-        self, workspace_id: uuid.UUID, rfc_ids: tuple[str, ...]
+    async def _sent_by_message_ids(
+        self, workspace_id: uuid.UUID, message_ids: tuple[str, ...], tokens: tuple[str, ...] = ()
     ) -> EmailMessage | None:
-        if not rfc_ids:
+        """Our message that a reply or bounce refers to.
+
+        Gmail replaces the ``Message-ID`` of every message it sends, so replies quote the id Gmail assigned
+        (``sent_message_id``); a bounce also quotes our own ``X-AOI-Message`` token. The id we generated
+        (``rfc_message_id``) is still matched for providers that keep it.
+        """
+        wanted = [
+            EmailMessage.sent_message_id.in_(message_ids),
+            EmailMessage.rfc_message_id.in_(message_ids),
+            *(
+                EmailMessage.rfc_message_id.like(f"<{token}@%")
+                for token in tokens
+                if token.isalnum()
+            ),
+        ]
+        if not message_ids and not tokens:
             return None
         async with self._sessions() as s:
             return (
                 await s.execute(
                     select(EmailMessage)
-                    .where(
-                        EmailMessage.workspace_id == workspace_id,
-                        EmailMessage.rfc_message_id.in_(rfc_ids),
-                    )
+                    .where(EmailMessage.workspace_id == workspace_id, or_(*wanted))
                     .order_by(EmailMessage.sent_at.desc().nulls_last())
                     .limit(1)
                 )

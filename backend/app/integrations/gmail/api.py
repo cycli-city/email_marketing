@@ -29,6 +29,7 @@ import structlog
 from app.core.clock import Clock
 from app.core.redact import scrub_error
 from app.integrations.gmail.inbound import METADATA_HEADERS
+from app.integrations.gmail.mime import ADDRESS_RE
 from app.providers.errors import (
     AuthError,
     ForbiddenReason,
@@ -46,7 +47,8 @@ log = structlog.get_logger(__name__)
 
 GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
 
-_SAFE_MESSAGE_ID = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~@-]{3,300}$")
+_TOKEN = re.compile(r"^[A-Za-z0-9]{8,64}$")
+_MAX_CANDIDATES = 20
 _RETRY_AFTER_IN_TEXT = re.compile(r"retry after (\d{4}-\d{2}-\d{2}T[\d:.]+Z)", re.IGNORECASE)
 _SENDING_LIMIT_WORDS = ("mail sending", "sending quota", "sending limit", "daily user sending")
 _RATE_REASONS = {"ratelimitexceeded", "userratelimitexceeded"}
@@ -64,6 +66,8 @@ class MessageRef:
     id: str
     thread_id: str
     internal_date: datetime | None = None  # when Gmail stored it (only from get_message_ref)
+    message_id_header: str | None = None  # the Message-ID Gmail assigned (it replaces ours on send)
+    aoi_token: str | None = None  # our X-AOI-Message header, which Gmail keeps
 
 
 class HistoryExpiredError(Exception):
@@ -265,39 +269,66 @@ class GmailApi:
             )
         return SentMessage(id=message_id, thread_id=returned_thread)
 
-    async def find_by_rfc_message_id(self, token: str, rfc_message_id: str) -> list[MessageRef]:
-        """Messages in the mailbox whose ``Message-ID`` header is ours — how an unknown send outcome is resolved."""
-        bare = rfc_message_id.strip().removeprefix("<").removesuffix(">")
-        if not _SAFE_MESSAGE_ID.fullmatch(bare):
-            raise PermanentProviderError("refusing to search for a malformed Message-ID")
+    async def find_sent_by_token(
+        self, token: str, *, recipient: str, after: datetime, aoi_token: str
+    ) -> list[MessageRef]:
+        """Our message in the mailbox, found without knowing the Message-ID Gmail gave it.
+
+        Gmail replaces the ``Message-ID`` header of every message sent through its API, so a search for the id we
+        generated can never succeed. What survives is our own ``X-AOI-Message`` header. Search the Sent folder for
+        mail to the same recipient since shortly before the send (a handful of candidates at most), then keep the ones
+        carrying our token. Spam and trash are included.
+        """
+        if not ADDRESS_RE.fullmatch(recipient) or not _TOKEN.fullmatch(aoi_token):
+            raise PermanentProviderError("refusing to search with a malformed recipient or token")
         body = await self._request(
             "GET",
             "/messages",
             token=token,
-            params={"q": f"rfc822msgid:{bare}", "includeSpamTrash": "true", "maxResults": "5"},
+            params={
+                "q": f"in:sent to:{recipient} after:{int(after.timestamp())}",
+                "includeSpamTrash": "true",
+                "maxResults": str(_MAX_CANDIDATES),
+            },
         )
-        return [
-            MessageRef(id=item["id"], thread_id=str(item.get("threadId", "")))
-            for item in body.get("messages") or []
-            if isinstance(item, dict) and isinstance(item.get("id"), str)
-        ]
+        matches: list[MessageRef] = []
+        for item in body.get("messages") or []:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                continue
+            ref = await self.get_message_ref(token, item["id"])
+            if ref.aoi_token == aoi_token:
+                matches.append(ref)
+        return matches
 
     async def get_message_ref(self, token: str, message_id: str) -> MessageRef:
-        """Id, thread and the time Gmail stored the message (``format=minimal`` — no content is fetched)."""
+        """Ids, the time Gmail stored the message, the Message-ID it assigned and our token (headers only)."""
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", message_id):
             raise PermanentProviderError("refusing to fetch a malformed Gmail message id")
         body = await self._request(
-            "GET", f"/messages/{message_id}", token=token, params={"format": "minimal"}
+            "GET",
+            f"/messages/{message_id}",
+            token=token,
+            params={"format": "metadata", "metadataHeaders": ["Message-ID", "X-AOI-Message"]},
         )
-        stored: datetime | None = None
+        headers = {
+            h["name"].lower(): h["value"]
+            for h in (body.get("payload") or {}).get("headers") or []
+            if isinstance(h, dict)
+            and isinstance(h.get("name"), str)
+            and isinstance(h.get("value"), str)
+        }
         try:
-            stored = datetime.fromtimestamp(int(body["internalDate"]) / 1000, tz=UTC)
+            stored: datetime | None = datetime.fromtimestamp(
+                int(body["internalDate"]) / 1000, tz=UTC
+            )
         except (KeyError, ValueError, TypeError, OverflowError, OSError):
             stored = None
         return MessageRef(
             id=str(body.get("id", message_id)),
             thread_id=str(body.get("threadId", "")),
             internal_date=stored,
+            message_id_header=headers.get("message-id", "").strip()[:300] or None,
+            aoi_token=headers.get("x-aoi-message", "").strip() or None,
         )
 
     # ───────────────────────────── identity ─────────────────────────────

@@ -55,7 +55,7 @@ from app.domain.enums import (
     MessageKind,
     MessageStatus,
 )
-from app.integrations.gmail.api import GmailApi
+from app.integrations.gmail.api import GmailApi, MessageRef
 from app.integrations.gmail.credentials import MailboxCredentials
 from app.integrations.gmail.errors import AccountNeedsReauthError, GoogleUnavailableError
 from app.integrations.gmail.mime import Mailbox, MessageBuildError, OutboundEmail, build_message
@@ -84,6 +84,9 @@ QUOTA_PARK = timedelta(
 )  # re-check interval after Gmail's sending limit; NOT a claimed reset time
 TRANSIENT_PARK = timedelta(minutes=5)
 ALIAS_CACHE_TTL = timedelta(minutes=10)
+SEARCH_LEAD = timedelta(
+    minutes=5
+)  # how far before the claim to look in Sent (clock skew; Gmail's `after:` is in seconds)
 HOUR = timedelta(hours=1)
 DAY = timedelta(hours=24)
 _RECENT_REFERENCES = 10
@@ -170,6 +173,7 @@ class _Pending:
     claimed_at: datetime
     status: MessageStatus
     attempts: int
+    recipient: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +212,7 @@ def _pending_from(m: EmailMessage) -> _Pending | None:
         claimed_at=m.claimed_at,
         status=m.status,
         attempts=m.attempt_count,
+        recipient=m.to_email,
     )
 
 
@@ -389,7 +394,8 @@ class MailboxSender:
         previous = (
             (
                 await s.execute(
-                    select(EmailMessage.rfc_message_id)
+                    # The id the recipient's mail client sees: the one Gmail assigned, not the one we generated.
+                    select(func.coalesce(EmailMessage.sent_message_id, EmailMessage.rfc_message_id))
                     .where(
                         EmailMessage.thread_id == message.thread_id,
                         EmailMessage.status == MessageStatus.SENT,
@@ -430,8 +436,20 @@ class MailboxSender:
             sent = await self._gmail.send(token, raw, thread_id=c.gmail_thread_id)
         except ProviderError as exc:
             return await self._after_send_error(c, exc, token)
-        await self._record_sent(c, sent.id, sent.thread_id, sent_at=self._clock.now())
+        assigned = await self._assigned_message_id(token, sent.id)
+        await self._record_sent(
+            c, sent.id, sent.thread_id, sent_at=self._clock.now(), message_id_header=assigned
+        )
         return SendResult(SendOutcome.SENT, c.message_id)
+
+    async def _assigned_message_id(self, token: str, gmail_id: str) -> str | None:
+        """The Message-ID header Gmail stored (it replaces the one we generated). Best effort: the send already
+        succeeded, so a failure here must never turn into a failed or repeated send."""
+        try:
+            return (await self._gmail.get_message_ref(token, gmail_id)).message_id_header
+        except ProviderError as exc:
+            log.warning("send.message_id_unknown", error=type(exc).__name__)
+            return None
 
     async def _token_or_defer(self, c: _Claim) -> str | SendResult:
         try:
@@ -639,7 +657,13 @@ class MailboxSender:
             )
 
     async def _record_sent(
-        self, c: _Handle, gmail_id: str, gmail_thread_id: str, *, sent_at: datetime
+        self,
+        c: _Handle,
+        gmail_id: str,
+        gmail_thread_id: str,
+        *,
+        sent_at: datetime,
+        message_id_header: str | None = None,
     ) -> bool:
         async with session_scope(self._sessions) as s:
             won = (
@@ -655,6 +679,7 @@ class MailboxSender:
                         sent_at=sent_at,
                         gmail_message_id=gmail_id,
                         gmail_thread_id=gmail_thread_id,
+                        sent_message_id=message_id_header,
                         claim_token=None,
                         error_class=None,
                         error_detail=None,
@@ -820,15 +845,19 @@ class MailboxSender:
         c = item.handle
         try:
             token = await self._credentials.access_token(c.workspace_id, c.account_id)
-            found = await self._gmail.find_by_rfc_message_id(token, c.rfc_message_id)
-            ref = await self._gmail.get_message_ref(token, found[0].id) if found else None
+            found = await self._gmail.find_sent_by_token(
+                token,
+                recipient=item.recipient,
+                after=item.claimed_at - SEARCH_LEAD,
+                aoi_token=c.rfc_message_id.removeprefix("<").split("@", 1)[0],
+            )
         except (AccountNeedsReauthError, GoogleUnavailableError, ProviderError) as exc:
             log.warning(
                 "send.reconcile_deferred", message_id=str(c.message_id), error=type(exc).__name__
             )
             return "waiting"
 
-        if found and ref is not None:
+        if found:
             if len(found) > 1:
                 await self._note(
                     c,
@@ -839,25 +868,15 @@ class MailboxSender:
                 log.error(
                     "send.duplicate_detected", message_id=str(c.message_id), copies=len(found)
                 )
-            return await self._confirm_sent(
-                c,
-                item.status,
-                found[0].id,
-                found[0].thread_id,
-                ref.internal_date or item.claimed_at,
-            )
+            return await self._confirm_sent(c, item.status, found[0], item.claimed_at)
         if self._clock.now() - item.claimed_at < SETTLE:
             return "waiting"
         return await self._conclude_absent(c, item.status, item.attempts)
 
     async def _confirm_sent(
-        self,
-        c: _Handle,
-        status: MessageStatus,
-        gmail_id: str,
-        gmail_thread_id: str,
-        sent_at: datetime,
+        self, c: _Handle, status: MessageStatus, ref: MessageRef, fallback_time: datetime
     ) -> str:
+        sent_at = ref.internal_date or fallback_time
         async with session_scope(self._sessions) as s:
             message = (
                 await s.execute(
@@ -875,12 +894,13 @@ class MailboxSender:
             account = await s.get(ConnectedEmailAccount, c.account_id)
             message.status = MessageStatus.SENT
             message.sent_at = sent_at
-            message.gmail_message_id = gmail_id
-            message.gmail_thread_id = gmail_thread_id
+            message.gmail_message_id = ref.id
+            message.gmail_thread_id = ref.thread_id
+            message.sent_message_id = ref.message_id_header
             message.claim_token = None
             message.error_class = None
             message.error_detail = None
-            await self._link_thread(s, message, c.account_id, gmail_thread_id, sent_at)
+            await self._link_thread(s, message, c.account_id, ref.thread_id, sent_at)
             self._remember_sent(
                 s,
                 replace(

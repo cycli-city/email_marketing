@@ -90,6 +90,13 @@ class EmailMessage(Base, UUIDPrimaryKeyMixin, TimestampMixin, WorkspaceScopedMix
             postgresql_where=text("status = 'queued'"),
         ),
         Index("ix_email_messages_to_email", "workspace_id", "to_email"),
+        # Replies and bounce notices quote the Message-ID Gmail assigned, so that is what they are matched on.
+        Index(
+            "ix_email_messages_sent_message_id",
+            "workspace_id",
+            "sent_message_id",
+            postgresql_where=text("sent_message_id IS NOT NULL"),
+        ),
         CheckConstraint("step_no >= 0", name="step_non_negative"),
     )
 
@@ -136,7 +143,11 @@ class EmailMessage(Base, UUIDPrimaryKeyMixin, TimestampMixin, WorkspaceScopedMix
     grounding_ok: Mapped[bool | None]
 
     idempotency_key: Mapped[str] = mapped_column(String(200))
-    rfc_message_id: Mapped[str] = mapped_column(String(300))  # our own Message-ID header value
+    # Our own Message-ID "<token@domain>", fixed when the message is queued. The token also travels in the
+    # `X-AOI-Message` header, which Gmail keeps — unlike the Message-ID itself, which Gmail replaces on send.
+    rfc_message_id: Mapped[str] = mapped_column(String(300))
+    # The Message-ID header Gmail actually assigned (what replies and bounces quote); known once sent.
+    sent_message_id: Mapped[str | None] = mapped_column(String(300))
     approved_at: Mapped[datetime | None]
     approved_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")

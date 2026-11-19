@@ -1,0 +1,10 @@
+.next
+node_modules
+openapi/openapi.json
+src/lib/api/schema.d.ts
+src/components/ui
+src/app/globals.css
+package-lock.json
+public
+test-results
+playwright-report

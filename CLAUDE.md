@@ -68,6 +68,19 @@ Run from `backend/` using the venv interpreter (`.\.venv\Scripts\python.exe`; `u
 | Generate secrets | `python scripts/gen_secrets.py` |
 | Dev API server | `uvicorn app.main:app_factory --factory --reload` |
 
+Frontend (run from `frontend/`):
+
+| Task | Command |
+|---|---|
+| Unit gate (what CI runs) | `npm run lint` · `npm run typecheck` · `npm run format:check` · `npm test` · `npm run build` |
+| Regenerate API types | `python scripts/export_openapi.py` (in `backend/`) then `npm run generate:api`; CI fails on drift (`--check`) |
+| **Full local E2E** (real stack, no Docker) | 3 background processes: `python scripts/dev_redis.py` · `python scripts/with_pg.py --name e2e -- alembic upgrade head` then `python scripts/with_pg.py --name e2e --keep-data -- python -m uvicorn app.main:app_factory --factory --port 8000` (all in `backend/`), then `npm run build && npx playwright test` |
+| Playwright browser | `npx playwright install chromium` (one-time) |
+
+Frontend gotchas: this shadcn uses **Base UI** (`render={<Link/>}` not `asChild`; active state is the bare `data-active` attribute); Next 16 has Cache Components
+on and `middleware` is now `proxy` — read `frontend/node_modules/next/dist/docs/` before using a Next API from memory; MSW v3 uses `onUnhandledFrame` (not
+`onUnhandledRequest`); `@types/node` must stay ≥ 22 for vitest 5; the dev Redis (`dev_redis.py`) is in-memory fakeredis, never for production.
+
 Gotchas learned: `Fact.statement` (not `text`) because a column named `text` shadows `sqlalchemy.text`; enum columns are VARCHAR+CHECK
 (`app/db/types.py::enum_col`) and `test_schema.py` verifies CHECKs match the Python enums; `FakeClock`/`Clock` for anything time-based;
 tests set `AOI_DISABLE_DOTENV=1` so a developer's real `.env` is never read; production settings refuse localhost/http URLs

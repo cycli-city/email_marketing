@@ -141,7 +141,16 @@ def tracked_text_files() -> list[tuple[str, str]]:
     return out
 
 
+def _utf8_output() -> None:
+    """Windows consoles default to cp1252, where printing a check mark raises AFTER a clean scan and blocks the hook."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_output()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--tree", action="store_true")
     parser.add_argument("--history", action="store_true")

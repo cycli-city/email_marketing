@@ -4,6 +4,91 @@
  */
 
 export interface paths {
+    "/api/v1/integrations/gmail/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Connected Gmail mailboxes */
+        get: operations["accounts_api_v1_integrations_gmail_accounts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/gmail/accounts/{account_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disconnect a mailbox and revoke Google's grant */
+        delete: operations["disconnect_api_v1_integrations_gmail_accounts__account_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/gmail/accounts/{account_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read-only connection check (asks Gmail for the mailbox profile; sends nothing) */
+        post: operations["test_connection_api_v1_integrations_gmail_accounts__account_id__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/gmail/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start connecting a Gmail mailbox */
+        post: operations["connect_api_v1_integrations_gmail_connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/gmail/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish connecting: exchange Google's code (the state must belong to the signed-in owner) */
+        post: operations["exchange_api_v1_integrations_gmail_exchange_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -59,6 +144,71 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccountOut */
+        AccountOut: {
+            account_type: components["schemas"]["AccountType"];
+            /** Connected At */
+            connected_at: string | null;
+            /** Display Name */
+            display_name: string | null;
+            /** Email */
+            email: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Error */
+            last_error: string | null;
+            /** Last Sync At */
+            last_sync_at: string | null;
+            mode: components["schemas"]["CampaignMode"];
+            /** Scopes */
+            scopes: string[];
+            status: components["schemas"]["AccountStatus"];
+        };
+        /**
+         * AccountStatus
+         * @enum {string}
+         */
+        AccountStatus: "active" | "needs_reauth" | "disconnected" | "error";
+        /**
+         * AccountType
+         * @enum {string}
+         */
+        AccountType: "personal_gmail" | "google_workspace" | "transactional";
+        /** AccountsResponse */
+        AccountsResponse: {
+            /** Accounts */
+            accounts: components["schemas"]["AccountOut"][];
+        };
+        /**
+         * CampaignMode
+         * @description The two operating modes. Data, templates, senders and categories never mix across modes.
+         * @enum {string}
+         */
+        CampaignMode: "nexora" | "job_hunter";
+        /** ConnectRequest */
+        ConnectRequest: {
+            mode: components["schemas"]["CampaignMode"];
+        };
+        /** ConnectResponse */
+        ConnectResponse: {
+            /** Authorization Url */
+            authorization_url: string;
+        };
+        /** ExchangeRequest */
+        ExchangeRequest: {
+            /** Code */
+            code: string;
+            /** State */
+            state: string;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
         /** LiveResponse */
         LiveResponse: {
             /**
@@ -107,6 +257,28 @@ export interface components {
              */
             status: "ready" | "degraded";
         };
+        /** TestResponse */
+        TestResponse: {
+            /** Email */
+            email: string;
+            /** Messages Total */
+            messages_total: number | null;
+            /** Ok */
+            ok: boolean;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -116,6 +288,220 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    accounts_api_v1_integrations_gmail_accounts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsResponse"];
+                };
+            };
+            /** @description Google OAuth is not configured on this server */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    disconnect_api_v1_integrations_gmail_accounts__account_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such mailbox */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Google OAuth is not configured on this server */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    test_connection_api_v1_integrations_gmail_accounts__account_id__test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestResponse"];
+                };
+            };
+            /** @description No such mailbox */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reconnect required */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Google OAuth is not configured on this server */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    connect_api_v1_integrations_gmail_connect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Google OAuth is not configured on this server */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exchange_api_v1_integrations_gmail_exchange_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountOut"];
+                };
+            };
+            /** @description Invalid/expired state, or Google refused the code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The mailbox is already connected for the other mode */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A required permission was not granted */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Google OAuth is not configured on this server */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     me_api_v1_me_get: {
         parameters: {
             query?: never;

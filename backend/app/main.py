@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app import __version__
-from app.api import health, me
+from app.api import gmail, health, me
 from app.api.errors import install_error_handlers
 from app.auth.jwks import JwksCache
 from app.auth.provisioning import OwnerDirectory
@@ -30,7 +30,10 @@ from app.core.http import build_http_client
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.ratelimit import InMemoryRateLimiter, Limit
+from app.core.security import Encryptor
 from app.db.session import create_engine, create_session_factory
+from app.integrations.gmail.oauth import GoogleClient, OAuthConfig
+from app.integrations.gmail.service import GmailService
 
 logger = structlog.get_logger("app")
 
@@ -78,6 +81,24 @@ def create_app(
                 clock,
             )
             app.state.owner_directory = OwnerDirectory(app.state.session_factory, clock)
+        client_id, client_secret, redirect_uri = (
+            settings.google_client_id,
+            settings.google_client_secret,
+            settings.google_redirect_uri,
+        )
+        if client_id and client_secret and redirect_uri and settings.encryption_keys:
+            oauth_config = OAuthConfig(
+                client_id=client_id,
+                client_secret=client_secret.get_secret_value(),
+                redirect_uri=redirect_uri,
+            )
+            app.state.gmail_service = GmailService(
+                session_factory=app.state.session_factory,
+                clock=clock,
+                encryptor=Encryptor(settings.encryption_keys),
+                google=GoogleClient(http_client, oauth_config, clock),
+                config=oauth_config,
+            )
         logger.info(
             "app.started",
             env=settings.app_env,
@@ -109,7 +130,9 @@ def create_app(
     sensitive = Limit("sensitive", settings.rate_limit_sensitive_per_minute)
     rules = [
         Rule("/api/v1/auth", sensitive),
-        Rule("/api/v1/integrations/gmail/callback", sensitive),
+        Rule(
+            "/api/v1/integrations/gmail", sensitive
+        ),  # connect / exchange / accounts: rarely used, worth guarding
         Rule("/u/", Limit("unsubscribe", settings.rate_limit_sensitive_per_minute)),
         Rule("/webhooks/", Limit("webhook", 600)),
     ]
@@ -145,6 +168,7 @@ def create_app(
 
     app.include_router(health.router)
     app.include_router(me.router)
+    app.include_router(gmail.router)
     return app
 
 

@@ -72,6 +72,14 @@ test.describe("the login gate", () => {
     await expect(page.getByTestId("signed-in-as")).toHaveText(OWNER.email);
   });
 
+  test("Google's callback needs a signed-in owner: a signed-out visitor is sent to sign in, not given an error page", async ({
+    page,
+  }) => {
+    await page.goto("/integrations/gmail/callback?code=abc&state=def");
+    await expect(page).toHaveURL(/\/login\?next=/);
+    await expect(page.getByRole("heading", { name: "AI Outreach Intelligence" })).toBeVisible();
+  });
+
   test("the login page has no accessibility violations (WCAG A/AA)", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();

@@ -14,7 +14,7 @@ Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depe
 | 2a | **Postgres job queue + worker** (ADR-024/030) | ✅ | `app/queue/`: SKIP LOCKED claims, leases + heartbeats, fenced writes, backoff, park/release, dead letters, dedupe/outbox, cooperative cancel, periodic jobs, graceful shutdown, reaper, retention. 83 new tests on real Postgres. Not yet started by the app (wired in with the first real task handlers). |
 | 2b | **ProviderManager + Groq adapter** (ADR-031) | ✅ | Capability routing, atomic quota reservation, failover, cooldown/circuit with single probe, honest provider-reported credits, per-minute pacing, no-evasion send rules, privacy gate. Groq (`groq-smart`/`groq-fast`) **verified live** against the real API. Not yet started by the app (wired with the first task handlers). |
 | 2c | **Authentication** (ADR-032/033) | ✅ | Backend: ES256/RS256 token verification pinned to the project's keys, owner allow-list, optional MFA gate, fail-closed. Dashboard: login page, `HttpOnly` `__Host-` session cookie, same-origin API proxy (the browser holds no token), CSRF/Origin checks, sign-out that revokes the session. 43 real-browser tests against a fake Supabase Auth, **plus a live check against the real Supabase project (2026-11-19)**: owner login created (`scripts/setup_owner_login.py`), token lifetime set to 15 min, password min length 12, sign-ups still off; a real session was accepted by the backend verifier, the project's anon/service keys and a tampered signature were refused, and a full real-browser login/sign-out passed. |
-| 2d | Gmail OAuth + token store | 🚧 **next** | Client ID + secret stored in `.local/`; the owner has published the Google app and verified branding (2026-11-19). |
+| 2d | **Gmail connection** (ADR-034) | ✅ built, 🟡 **awaiting the owner's first real connect** | OAuth with PKCE + session-bound encrypted state, encrypted token storage, automatic refresh, reconnect-needed handling, read-only test, disconnect+revoke; Settings → Integrations page. 77 backend + 32 frontend + browser tests against a fake Google. Google app is published and branding verified; the owner still has to click Connect once and approve (the "unverified app" screen is expected). |
 | 3 | Lead discovery (Overture/OSM/Geoapify + SSRF-guarded crawler, extraction, verification, qualification) | ⬜ | Sources in `docs/PROVIDERS.md`. |
 | 4 | Outreach (templates, generation, campaigns, sender adapters, approvals, adaptive ramp) | ⬜ | Sending architecture: ADR-025/026. |
 | 5 | Reply intelligence (sync, classify, notify, follow-ups) | ⬜ | |
@@ -24,7 +24,7 @@ Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depe
 
 ## Quality gate (local, 2026-11-19)
 Backend: `ruff` ✅ · `ruff format` ✅ · `mypy --strict` ✅ (82 files) · `pytest` ✅ **562 passed** (+4 opt-in live tests against the real Groq API, run on demand) (unit + integration on real PostgreSQL 16) · OpenAPI export current ✅.
-Frontend: `eslint` (incl. XSS-sink bans) ✅ · `tsc` ✅ · `prettier` ✅ · `vitest` ✅ **147 passed** · `next build` ✅ · **Playwright 43/43 against the real API + Postgres + a fake Supabase Auth (3 consecutive clean runs)** incl. login/logout, cookie flags, no token in JS/storage/HTML/responses, forged-session rejection, session refresh, CSRF checks, axe WCAG A/AA, nonce CSP, blocked injection/exfiltration/clickjacking.
+Frontend: `eslint` (incl. XSS-sink bans) ✅ · `tsc` ✅ · `prettier` ✅ · `vitest` ✅ **147 passed** · `next build` ✅ · **Playwright 52/52 against the real API + Postgres + a fake Supabase Auth** incl. login/logout, cookie flags, no token in JS/storage/HTML/responses, forged-session rejection, session refresh, CSRF checks, axe WCAG A/AA, nonce CSP, blocked injection/exfiltration/clickjacking.
 Security/public-readiness: `scan_secrets.py` clean (tree, history, browser bundle) ✅ · `prepublic_audit.py` clean on tree + workflows ✅ · **git history fails the audit by design** (ADR-027) ⇒ publish via a clean-slate repo.
 
 ## Feature-completion report (REQUIREMENTS.md §21)
@@ -48,7 +48,7 @@ Phases 2–8.
 
 ## Next up (in order)
 1. Push this work to the (still private) repo; confirm CI green without Redis.
-2. Phase 2: ~~Postgres job queue~~ ✅ → ~~ProviderManager + Groq~~ ✅ → ~~Supabase auth with BFF cookie sessions~~ ✅ (live-verified) → **Gmail OAuth + token store** (client ID/secret in `.local/SECRETS.local.md`; Google app published).
+2. Phase 2: ~~Postgres job queue~~ ✅ → ~~ProviderManager + Groq~~ ✅ → ~~Supabase auth with BFF cookie sessions~~ ✅ (live-verified) → ~~Gmail OAuth + token store~~ ✅ (needs the owner to connect a mailbox) → next: **Gmail send/read adapters on the provider framework** (exactly-once send protocol, inbox sync), then Phase 3 discovery.
    Then wire queue + manager into app startup together with the first real task handlers (Phase 3), and the Groq-based prompt-injection guard (Prompt Guard 2) when reply classification is built.
 3. Public publication (only when the owner provides the new repo + new token — ADR-027).
 

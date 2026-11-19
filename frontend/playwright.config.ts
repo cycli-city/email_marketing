@@ -33,7 +33,7 @@ export default defineConfig({
     {
       name: "owner",
       dependencies: ["setup"],
-      testMatch: /(system|security|bff)\.spec\.ts/,
+      testMatch: /(system|security|bff|integrations)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], storageState: OWNER_STATE },
     },
     { name: "anonymous", testMatch: /(auth|login)\.spec\.ts/, use: { ...devices["Desktop Chrome"] } },

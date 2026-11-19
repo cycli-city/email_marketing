@@ -157,12 +157,22 @@ jobs:
           uv sync --frozen
           PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE aoi"
           uv run alembic upgrade head
+      - name: Throw-away encryption key for the e2e backend
+        working-directory: backend
+        run: |
+          KEY=$(uv run python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
+          echo "::add-mask::$KEY"
+          echo "ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
       - name: Start API
         working-directory: backend
         env:
           # Stands in for Supabase Auth: frontend/e2e/support/fake-idp.mjs (started by Playwright) signs genuine ES256 tokens.
           SUPABASE_URL: http://127.0.0.1:54321
           OWNER_EMAILS: owner@example.com,shortlived@example.com
+          # Fake Google OAuth settings: the browser tests only inspect the URL we send people to; Google is never contacted.
+          GOOGLE_CLIENT_ID: e2e-client-id.apps.googleusercontent.com
+          GOOGLE_CLIENT_SECRET: e2e-not-a-real-secret
+          GOOGLE_REDIRECT_URI: http://localhost:3000/integrations/gmail/callback
         run: |
           nohup uv run uvicorn app.main:app_factory --factory --port 8000 --no-server-header > /tmp/api.log 2>&1 &
           curl --retry 40 --retry-connrefused --retry-delay 1 -sf http://localhost:8000/readyz

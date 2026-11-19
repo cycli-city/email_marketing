@@ -4,38 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
-
-MAX_ERROR_CHARS = 2000
-
-# Errors are persisted (job_queue.last_error, dead_letters) and shown in the UI, so they must never carry
-# credentials. Adapters should not put secrets in exceptions in the first place; this is the safety net.
-_SECRET_PATTERNS = (
-    re.compile(
-        r"(?i)\b(api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|token|secret|password|passwd|"
-        r"authorization|client[_-]?secret)\b\s*[=:]\s*(bearer\s+)?[^\s,;&\"']+"
-    ),
-    re.compile(r"(?i)\bbearer\s+[a-z0-9._\-~+/]+=*"),
-    re.compile(r"\b(?:gsk|sbp|ghp|gho|ghs|github_pat|sk|rk|xox[abp])[-_][A-Za-z0-9_\-]{16,}"),
-    re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}"),  # JWT
-)
-
-
-def scrub_error(message: str) -> str:
-    """Redact credential-looking substrings and bound the length."""
-    cleaned = message
-    for pattern in _SECRET_PATTERNS:
-        cleaned = pattern.sub(
-            lambda m: f"{m.group(1)}=[redacted]" if m.lastindex else "[redacted]", cleaned
-        )
-    if len(cleaned) > MAX_ERROR_CHARS:
-        cleaned = cleaned[:MAX_ERROR_CHARS] + "…[truncated]"
-    return cleaned
 
 
 def payload_hash(payload: dict[str, Any]) -> str:

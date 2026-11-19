@@ -17,7 +17,6 @@ from app.queue.types import (
     Heartbeat,
     QueueStats,
     ReapResult,
-    scrub_error,
 )
 from app.queue.worker import (
     JobContext,
@@ -47,5 +46,4 @@ __all__ = [
     "TaskRegistry",
     "Worker",
     "WorkerConfig",
-    "scrub_error",
 ]

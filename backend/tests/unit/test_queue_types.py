@@ -4,8 +4,9 @@ from datetime import UTC, datetime
 
 import pytest
 
+from app.core.redact import MAX_ERROR_CHARS, scrub_error
 from app.queue.errors import ParkJob
-from app.queue.types import MAX_ERROR_CHARS, payload_hash, scrub_error
+from app.queue.types import payload_hash
 
 
 class TestScrubError:

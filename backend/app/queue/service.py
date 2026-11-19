@@ -31,6 +31,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.clock import Clock
+from app.core.redact import scrub_error
 from app.core.retry import DEFAULT_POLICY, BackoffPolicy, backoff_seconds
 from app.db.models import DeadLetter, Job
 from app.db.session import session_scope
@@ -44,7 +45,6 @@ from app.queue.types import (
     QueueStats,
     ReapResult,
     payload_hash,
-    scrub_error,
 )
 
 log = structlog.get_logger("queue")

@@ -106,6 +106,7 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"
 markers = [
     "integration: needs a real PostgreSQL (DATABASE_URL_TEST); skipped when unavailable",
+    "live: calls a real third-party API with a real key; opt-in (RUN_LIVE=1), never run in CI",
 ]
 filterwarnings = ["error::DeprecationWarning:app.*"]
 

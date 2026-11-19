@@ -12,7 +12,8 @@ Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depe
 | 1c | **No Redis** (ADR-024) | ✅ | Redis/ARQ removed everywhere; queue will be a Postgres table; rate limiter in-process. |
 | 1d | Public-readiness tooling (ADR-027) | ✅ | `scripts/prepublic_audit.py` (+ CI step), sanitised docs, personal data moved to `.local/`. |
 | 2a | **Postgres job queue + worker** (ADR-024/030) | ✅ | `app/queue/`: SKIP LOCKED claims, leases + heartbeats, fenced writes, backoff, park/release, dead letters, dedupe/outbox, cooperative cancel, periodic jobs, graceful shutdown, reaper, retention. 83 new tests on real Postgres. Not yet started by the app (wired in with the first real task handlers). |
-| 2 | Provider framework + auth + Gmail | 🚧 **in progress** — Supabase project + schema live, Groq verified, queue done | ProviderManager (failover/credits) → Supabase auth with BFF cookies → Gmail OAuth. Needs Phase-2 keys. |
+| 2b | **ProviderManager + Groq adapter** (ADR-031) | ✅ | Capability routing, atomic quota reservation, failover, cooldown/circuit with single probe, honest provider-reported credits, per-minute pacing, no-evasion send rules, privacy gate. Groq (`groq-smart`/`groq-fast`) **verified live** against the real API. Not yet started by the app (wired with the first task handlers). |
+| 2 | Auth + Gmail | 🚧 **in progress** | Supabase auth with BFF cookies → Gmail OAuth (**needs the Google Cloud OAuth client from the owner**). |
 | 3 | Lead discovery (Overture/OSM/Geoapify + SSRF-guarded crawler, extraction, verification, qualification) | ⬜ | Sources in `docs/PROVIDERS.md`. |
 | 4 | Outreach (templates, generation, campaigns, sender adapters, approvals, adaptive ramp) | ⬜ | Sending architecture: ADR-025/026. |
 | 5 | Reply intelligence (sync, classify, notify, follow-ups) | ⬜ | |
@@ -21,7 +22,7 @@ Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depe
 | 8 | Deployment (Supabase, Render, Vercel) + docs | ⬜ | Hosting terms open (ADR-023). |
 
 ## Quality gate (local, 2026-11-19)
-Backend: `ruff` ✅ · `ruff format` ✅ · `mypy --strict` ✅ (60 files) · `pytest` ✅ **294 passed** (unit + integration on real PostgreSQL 16) · OpenAPI export current ✅.
+Backend: `ruff` ✅ · `ruff format` ✅ · `mypy --strict` ✅ (82 files) · `pytest` ✅ **473 passed** (+4 opt-in live tests against the real Groq API, run on demand) (unit + integration on real PostgreSQL 16) · OpenAPI export current ✅.
 Frontend: `eslint` (incl. XSS-sink bans) ✅ · `tsc` ✅ · `prettier` ✅ · `vitest` ✅ **35 passed** · `next build` ✅ · **Playwright 22/22 against the real API + Postgres (no Redis)** incl. axe WCAG A/AA, nonce CSP, blocked injection/exfiltration/clickjacking.
 Security/public-readiness: `scan_secrets.py` clean (tree, history, browser bundle) ✅ · `prepublic_audit.py` clean on tree + workflows ✅ · **git history fails the audit by design** (ADR-027) ⇒ publish via a clean-slate repo.
 
@@ -32,6 +33,7 @@ Security/public-readiness: `scan_secrets.py` clean (tree, history, browser bundl
 - Relational schema (34 tables) + verified migration with DB-enforced safety rules (guessed email never verified; one message per campaign/contact/step; idempotency keys; score 0–100; RLS on every table; append-only audit log).
 - FastAPI shell: request-ID, security headers + API CSP, HSTS (prod), HTTP→HTTPS redirect, trusted hosts, in-process rate limiting (bounded memory, spoof-proof client IP), concurrency cap, body-size limit, DB timeouts, uniform error envelope, `/healthz`, `/readyz` (database).
 - Durable Postgres job queue + in-process worker (no Redis): exactly-one claimer under concurrency, crash recovery, zombie-write fencing, retry/backoff with `Retry-After`, parking without burning attempts, dead letters with retry/discard, dedupe keys, graceful shutdown — all proven against a real database (ADR-030).
+- ProviderManager (ADR-031): capability routing with free-first / priority / headroom ordering; atomic quota reservation (30-way race on a quota of 10 never overspends); failover on quota / 429 / 5xx / 401 / 403 with the correct per-error behaviour; cooldown + circuit with a single recovery probe; provider-reported credits only (never invented); per-minute pacing; sending limits and policy refusals are never routed around; non-idempotent calls never repeated blindly; privacy gate for personal data; settings-page overview data. Groq adapter (two per-model providers on one key) verified live.
 - Contract-first pipeline (OpenAPI → generated TS types → typed client) with drift checks.
 - Next.js 16 dashboard shell: responsive sidebar, light/dark, System status page, custom 404/error pages, strict nonce CSP + hardening headers.
 - Secret scanning (hooks, CI, bundle), gitleaks, pre-public audit, GitHub helper that never exposes the token.
@@ -45,7 +47,8 @@ Phases 2–8.
 
 ## Next up (in order)
 1. Push this work to the (still private) repo; confirm CI green without Redis.
-2. Phase 2: ~~Postgres job queue~~ ✅ → **ProviderManager** (registry, capability protocols, quotas/credits, cooldown, circuit breaker, failover) + Groq adapter → auth (BFF) → Gmail OAuth. **Still needed from the owner for Gmail OAuth:** the Google Cloud OAuth client (Supabase and Groq are already in `.local/SECRETS.local.md`).
+2. Phase 2: ~~Postgres job queue~~ ✅ → ~~ProviderManager + Groq~~ ✅ → **Supabase auth with BFF cookie sessions** (ADR-014; owner-email allowlist, JWT pinned to the algorithm, JWKS) → Gmail OAuth + token store. **Needed from the owner for Gmail OAuth:** the Google Cloud OAuth client (Supabase and Groq are already in `.local/SECRETS.local.md`).
+   Then wire queue + manager into app startup together with the first real task handlers (Phase 3), and the Groq-based prompt-injection guard (Prompt Guard 2) when reply classification is built.
 3. Public publication (only when the owner provides the new repo + new token — ADR-027).
 
 ## Owner action checklist (agreed 2026-11-19)

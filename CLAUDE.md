@@ -84,6 +84,7 @@ Run from `backend/` using the venv interpreter (`.\.venv\Scripts\python.exe`; `u
 | Integration tests | `pytest tests/integration` — auto-starts a throw-away Postgres 16 via `pgserver`; in CI uses `DATABASE_URL_TEST` |
 | Run any command against a temp Postgres | `python scripts/with_pg.py -- alembic upgrade head` |
 | New migration | `python scripts/with_pg.py -- alembic revision --autogenerate -m "msg"` → **review it**, call `enable_rls()` for new tables (`app/db/migration_helpers.py`), then `pytest tests/integration/test_schema.py` |
+| Live provider checks (opt-in, real API, a few free requests; never in CI) | `RUN_LIVE=1 GROQ_API_KEY=… pytest -m live` — load the key from `.local/SECRETS.local.md` into the process environment only; never print it |
 | Generate secrets | `python scripts/gen_secrets.py` |
 | Dev API server | `uvicorn app.main:app_factory --factory --reload` |
 
@@ -100,7 +101,9 @@ Frontend gotchas: this shadcn uses **Base UI** (`render={<Link/>}` not `asChild`
 on and `middleware` is now `proxy` — read `frontend/node_modules/next/dist/docs/` before using a Next API from memory; MSW v3 uses `onUnhandledFrame` (not
 `onUnhandledRequest`); `@types/node` must stay ≥ 22 for vitest 5; Render free blocks outbound SMTP (25/465/587) so mail goes through the Gmail **REST** API only, and SMTP-probe email verification is impossible; Resend/Brevo/any ESP forbid cold outreach — never route prospecting mail through them (ADR-021).
 
-Gotchas learned: `Fact.statement` (not `text`) because a column named `text` shadows `sqlalchemy.text`; enum columns are VARCHAR+CHECK
+**Never rewrite source/doc files with PowerShell 5.1 `Get-Content`/`Set-Content`** (even with `-Encoding utf8`): they read UTF-8 as cp1252 and write it back, corrupting `—`, `→`, `…` into `â€”`-style mojibake (it hit `docs/DECISIONS.md` and four Python files once). Use the Edit/Write tools, or a Python script with explicit `encoding="utf-8"`. `ruff format` over `migrations/` rewrites committed migrations — format only `app tests scripts` (CI's scope).
+
+Gotchas learned: Queue/provider code lives in `app/queue/` and `app/providers/` (ADR-030/031); time-dependent rows must use the injected clock (`created_at=clock.now()`), never the server default, or fake-clock tests become time bombs; `Fact.statement` (not `text`) because a column named `text` shadows `sqlalchemy.text`; enum columns are VARCHAR+CHECK
 (`app/db/types.py::enum_col`) and `test_schema.py` verifies CHECKs match the Python enums; `FakeClock`/`Clock` for anything time-based;
 tests set `AOI_DISABLE_DOTENV=1` so a developer's real `.env` is never read; production settings refuse localhost/http URLs
 (unsubscribe links are built from `BACKEND_URL`).

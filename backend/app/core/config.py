@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     supabase_service_role_key: SecretStr | None = None
     supabase_jwt_secret: SecretStr | None = None
     # NoDecode: pydantic-settings would otherwise try to read this env var as JSON and crash on the documented
-    # comma-separated form (`OWNER_EMAILS=a@x.com,b@x.com`) before our parser ever runs.
+    # comma-separated form (`OWNER_EMAILS=a@example.com,b@example.com`) before our parser ever runs.
     owner_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
     # Require a second factor (Supabase TOTP, AAL2) on top of the password. Enable once MFA is enrolled.
     auth_require_mfa: bool = False
@@ -128,7 +128,7 @@ class Settings(BaseSettings):
     @field_validator("owner_emails", mode="before")
     @classmethod
     def _split_owner_emails(cls, value: object) -> object:
-        """Accepts ``a@x.com,B@x.com`` (the documented form), a JSON array, or a real list; lower-cases, drops
+        """Accepts ``a@example.com,B@Example.com`` (the documented form), a JSON array, or a real list; lower-cases, drops
         blanks and duplicates, keeps order."""
         if isinstance(value, str):
             text = value.strip()

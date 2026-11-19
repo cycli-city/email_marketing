@@ -25,7 +25,7 @@ Secrets: `scan_secrets.py` ✅ clean on tree, full git history and the built bro
 ## First GitHub CI run (2026-11-19) — what it found
 ✅ Frontend, API-contract, backend py3.11 + py3.12 tests (real Postgres + Redis service containers) and E2E (10/10) passed on GitHub.
 Fixed after reading the logs: `pip-audit --disable-pip` needs a hashed export (my flag); gitleaks *action* fails on a first push → replaced with a pinned, checksum-verified binary; setup-uv cache-prune post-step crashed in the E2E job → cache disabled there; Dependabot exposed that `arq` caps `redis<6` → capped + `requires-python <3.14`; `pgserver` had never been declared as a dev dependency → declared. All actions now pinned to commit SHAs.
-**The corrected CI has not run yet — it runs on the next push.**
+**Corrected CI result (commit `adaf91f`): all 6 jobs green on GitHub** — Backend py3.11, Backend py3.12, Frontend, API contract, E2E (Playwright, real backend), Secret scan (repo scanner + gitleaks over full history). CodeQL is skipped by design while the repo is private. gitleaks' only two findings were deliberate test fixtures (allowlisted by exact fingerprint in `.gitleaksignore`) — it independently confirmed no real secret was ever committed. Dependabot is configured to skip majors, group updates and cap open PRs (CI-minutes budget).
 
 ## Feature-completion report (REQUIREMENTS.md §21)
 ### Fully implemented and tested

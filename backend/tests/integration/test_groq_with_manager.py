@@ -15,11 +15,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.clock import FakeClock
+from app.core.http import build_http_client
 from app.db.models import ProviderState
 from app.domain.enums import Capability, CreditsAccuracy, ProviderStatus
 from app.providers.errors import AllProvidersUnavailableError
 from app.providers.groq import GroqProvider, build_groq_providers
-from app.providers.http import build_http_client
 from app.providers.llm import LLMProvider, LLMRequest, estimate_tokens
 from app.providers.manager import ProviderManager
 from app.providers.registry import ProviderRegistry

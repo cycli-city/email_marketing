@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     supabase_service_role_key: SecretStr | None = None
     supabase_jwt_secret: SecretStr | None = None
     owner_emails: list[str] = Field(default_factory=list)
+    # Require a second factor (Supabase TOTP, AAL2) on top of the password. Enable once MFA is enrolled.
+    auth_require_mfa: bool = False
+    auth_jwks_ttl_seconds: int = Field(
+        default=600, ge=60
+    )  # how long cached signing keys are trusted
+    auth_leeway_seconds: int = Field(
+        default=10, ge=0, le=60
+    )  # clock-skew allowance for exp / nbf / iat
 
     # ── secrets for our own crypto ───────────────────────────
     # ENCRYPTION_KEY: one or more comma-separated Fernet keys; the first encrypts, all decrypt.
@@ -232,6 +240,16 @@ class Settings(BaseSettings):
     @property
     def supabase_auth_configured(self) -> bool:
         return bool(self.supabase_url)
+
+    @property
+    def supabase_issuer(self) -> str | None:
+        """The ``iss`` every access token must carry (GoTrue's base URL)."""
+        return f"{self.supabase_url.rstrip('/')}/auth/v1" if self.supabase_url else None
+
+    @property
+    def supabase_jwks_url(self) -> str | None:
+        issuer = self.supabase_issuer
+        return f"{issuer}/.well-known/jwks.json" if issuer else None
 
 
 @lru_cache

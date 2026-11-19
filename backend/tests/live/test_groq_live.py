@@ -15,9 +15,9 @@ import pytest_asyncio
 from pydantic import SecretStr
 
 from app.core.clock import SYSTEM_CLOCK
+from app.core.http import build_http_client
 from app.providers.errors import AuthError
 from app.providers.groq import GroqProvider, build_groq_providers
-from app.providers.http import build_http_client
 from app.providers.llm import LLMRequest
 
 pytestmark = [

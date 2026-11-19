@@ -13,6 +13,7 @@ import pytest
 from pydantic import SecretStr
 
 from app.core.clock import FakeClock
+from app.core.http import InsecureRequestError, build_http_client
 from app.domain.enums import Capability
 from app.providers.errors import (
     AuthError,
@@ -25,7 +26,6 @@ from app.providers.errors import (
     TransientProviderError,
 )
 from app.providers.groq import GroqProvider, build_groq_providers, parse_duration_seconds
-from app.providers.http import InsecureRequestError, build_http_client
 from app.providers.llm import LLMRequest, estimate_tokens
 
 KEY = "gsk_" + "Zq81LmN4vB7xRt2KpW9cYd3E"

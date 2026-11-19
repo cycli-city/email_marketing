@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.core.errors import AppError, RateLimitedError
+from app.core.errors import AppError, RateLimitedError, UnauthorizedError
 
 logger = structlog.get_logger("errors")
 
@@ -51,6 +51,8 @@ def install_error_handlers(app: FastAPI) -> None:
         headers = None
         if isinstance(exc, RateLimitedError):
             headers = {"Retry-After": str(exc.retry_after)}
+        elif isinstance(exc, UnauthorizedError):
+            headers = {"WWW-Authenticate": "Bearer"}  # RFC 6750: tell clients how to authenticate
         if exc.status_code >= 500:
             logger.error("app_error", code=exc.code, message=exc.message, exc_info=exc)
         return _envelope(

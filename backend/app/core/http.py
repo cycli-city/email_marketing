@@ -1,4 +1,4 @@
-"""The one place outbound HTTP clients for provider adapters are built.
+"""The one place outbound HTTP clients are built (provider adapters, token-key fetches, OAuth).
 
 Rules (CLAUDE.md §1b): HTTPS only, certificates verified, **no redirects** (a redirect could carry an API key to
 another host), bounded timeouts and connections, and a generic User-Agent that carries no personal details.

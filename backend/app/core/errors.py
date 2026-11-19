@@ -42,6 +42,19 @@ class ForbiddenError(AppError):
     code = "forbidden"
 
 
+class MfaRequiredError(ForbiddenError):
+    """The session is valid but has not completed multi-factor authentication (AAL2)."""
+
+    code = "mfa_required"
+
+
+class AuthUnavailableError(AppError):
+    """Authentication cannot be performed right now (not configured, or signing keys unreachable). Fails closed."""
+
+    status_code = 503
+    code = "auth_unavailable"
+
+
 class RateLimitedError(AppError):
     status_code = 429
     code = "rate_limited"

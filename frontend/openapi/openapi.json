@@ -18,6 +18,42 @@
         "title": "LiveResponse",
         "type": "object"
       },
+      "MeResponse": {
+        "properties": {
+          "assurance_level": {
+            "title": "Assurance Level",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "session_expires_at": {
+            "format": "date-time",
+            "title": "Session Expires At",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "email",
+          "workspace_id",
+          "assurance_level",
+          "session_expires_at"
+        ],
+        "title": "MeResponse",
+        "type": "object"
+      },
       "ReadyResponse": {
         "properties": {
           "checks": {
@@ -47,6 +83,13 @@
         "title": "ReadyResponse",
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "description": "Supabase access token (attached by the BFF, never by the browser)",
+        "scheme": "bearer",
+        "type": "http"
+      }
     }
   },
   "info": {
@@ -55,6 +98,41 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/me": {
+      "get": {
+        "operationId": "me_api_v1_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired session"
+          },
+          "403": {
+            "description": "Not the owner, or a second factor is required"
+          },
+          "503": {
+            "description": "Authentication is not available (fails closed)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "The authenticated owner",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "operationId": "healthz_healthz_get",

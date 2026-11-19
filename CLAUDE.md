@@ -54,4 +54,21 @@ Implemented end-to-end (API + worker + UI where relevant) · unit + integration 
 Windows 11 · Node 24 · npm 11 · Python 3.11 · git. No Docker/gh/psql/Redis. Use `backend/.venv`. Shell commands: PowerShell is primary; Bash is Git Bash.
 
 ## 6. Commands (kept current — update when tooling changes)
-_Filled in as the scaffold lands; see `README.md` once it exists._
+Run from `backend/` using the venv interpreter (`.\.venv\Scripts\python.exe`; `uv` lives at
+`%LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\Scripts\uv.exe`).
+
+| Task | Command |
+|---|---|
+| Install / sync deps | `uv sync` (lockfile `uv.lock` is committed; add deps with `uv add …`) |
+| **Full local gate (what CI runs)** | `ruff check app tests scripts migrations` · `ruff format --check app tests scripts` · `mypy` · `pytest` |
+| Unit tests only (no DB, ~3 s) | `pytest tests/unit` |
+| Integration tests | `pytest tests/integration` — auto-starts a throw-away Postgres 16 via `pgserver`; in CI uses `DATABASE_URL_TEST` |
+| Run any command against a temp Postgres | `python scripts/with_pg.py -- alembic upgrade head` |
+| New migration | `python scripts/with_pg.py -- alembic revision --autogenerate -m "msg"` → **review it**, call `enable_rls()` for new tables (`app/db/migration_helpers.py`), then `pytest tests/integration/test_schema.py` |
+| Generate secrets | `python scripts/gen_secrets.py` |
+| Dev API server | `uvicorn app.main:app_factory --factory --reload` |
+
+Gotchas learned: `Fact.statement` (not `text`) because a column named `text` shadows `sqlalchemy.text`; enum columns are VARCHAR+CHECK
+(`app/db/types.py::enum_col`) and `test_schema.py` verifies CHECKs match the Python enums; `FakeClock`/`Clock` for anything time-based;
+tests set `AOI_DISABLE_DOTENV=1` so a developer's real `.env` is never read; production settings refuse localhost/http URLs
+(unsubscribe links are built from `BACKEND_URL`).

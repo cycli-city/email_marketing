@@ -18,7 +18,7 @@ Backend uses a privileged DB connection, so RLS can't be the primary control; it
 Per REQUIREMENTS_AUTONOMY §D/§I: email-send limit exhaustion waits for the next window; failover only on technical outage/auth error and only to campaign-authorised senders. No account/key rotation anywhere.
 
 **ADR-006 — Local dev without Docker** · accepted · 2026-11-19
-Machine has no Docker/psql/Redis. Unit tests are I/O-free; integration tests run in GitHub Actions service containers (Postgres 16 + Redis 7) and locally against a pip-installable Postgres + `fakeredis`. Details finalised during scaffold (see PROGRESS.md).
+Machine has no Docker/psql/Redis. Unit tests are I/O-free; integration tests run in GitHub Actions service containers (Postgres 16 + Redis 7) and locally against a pip-installable Postgres + `fakeredis`. **Confirmed 2026-11-19:** `pgserver` runs a real PostgreSQL 16.2 on this Windows machine; integration tests auto-start it (`backend/tests/conftest.py`), and `backend/scripts/with_pg.py` runs any command (alembic, uvicorn…) against a throw-away cluster. ARQ-against-real-Redis tests run in CI only (`redis:7` service) until a local Redis is available; locally a queue abstraction + `fakeredis` is used.
 
 **ADR-007 — pgvector not used in v1** · accepted · 2026-11-19
 Spec says "only if genuinely useful". No semantic retrieval requirement in v1; FTS covers lead search. Revisit if reply-similarity / KB features are added.
@@ -34,3 +34,9 @@ Some target countries are stricter than the spec's generic wording (e.g. Germany
 
 **ADR-011 — Job-hunter CVs are Drive links chosen per role** · accepted · 2026-11-19
 Owner keeps one resume per role on Google Drive. `resume_assets` stores role → link; emails include the right link; attachments are optional. No send of CV-requiring mail without a configured link.
+
+**ADR-012 — Single-owner personal tool** · accepted · 2026-11-19 · **[DEVIATION: narrows spec's "multi-user" hints]**
+Owner clarified the project is for personal use only. Decisions: (a) Supabase signup disabled / backend enforces `OWNER_EMAILS` allowlist; first login auto-provisions the single workspace; (b) keep `workspace_id` on tenant tables + isolation tests (spec §14 "proper tenant isolation if multi-user"), but no org/member management UI, billing, or plans; (c) Gmail OAuth consent screen stays owner-only (ADR-009), so no restricted-scope verification; (d) UI is tuned for one operator (fewer settings screens, no invites/roles). Compliance, safety and autonomy requirements are **unchanged**.
+
+**ADR-013 — Gmail via direct REST (httpx), not google-api-python-client** · accepted · 2026-11-19
+Gmail's REST API is the official API; calling it with `httpx` keeps everything async, trivially mockable with `respx`, and avoids discovery-document fetches and a heavy sync client. OAuth code exchange / refresh and Pub/Sub OIDC verification are implemented with `httpx` + PyJWT (JWKS). Scopes and flows are unchanged.

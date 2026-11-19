@@ -1,0 +1,119 @@
+[project]
+name = "aoi-backend"
+version = "0.1.0"
+description = "AI Outreach Intelligence — backend (FastAPI + ARQ workers)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # web
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "email-validator>=2.2",
+    "python-multipart>=0.0.12",
+    # database
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    # queue / cache
+    "arq>=0.26",
+    "redis>=5.2",
+    # http + security
+    "httpx>=0.28",
+    "cryptography>=43",
+    "pyjwt[crypto]>=2.10",
+    # research / extraction
+    "beautifulsoup4>=4.12",
+    "lxml>=5.3",
+    "protego>=0.3",
+    "dnspython>=2.7",
+    "tldextract>=5.1",
+    "nh3>=0.2.18",
+    "jinja2>=3.1",
+    # misc
+    "structlog>=24.4",
+    "orjson>=3.10",
+    "tzdata>=2024.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "respx>=0.21",
+    "fakeredis>=2.26",
+    "hypothesis>=6.120",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pip-audit>=2.7",
+    "types-beautifulsoup4",
+    "lxml-stubs",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+# ───────────────────────── tooling ─────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "C4", "SIM", "RET", "PL", "RUF", "T20", "PT", "DTZ", "PERF"]
+ignore = [
+    "E501",     # line length is handled by `ruff format`; long comments/strings are acceptable
+    "PLR0913",  # many args are fine in service signatures
+    "PLR2004",  # magic values in comparisons are common in rules code
+    "S101",     # asserts are fine in tests (handled per-file below) and invariants
+    "RUF012",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311", "PLR0915", "PLC0415", "DTZ001"]
+"migrations/**" = ["E501", "RUF012", "PLR0915", "Q000", "I001", "UP"]
+"scripts/**" = ["T201", "S603"]  # CLI helpers print and shell out by design
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app", "tests"]
+exclude = ["migrations/"]
+
+[[tool.mypy.overrides]]
+module = ["arq.*", "tldextract.*", "protego.*", "nh3.*", "fakeredis.*", "asyncpg.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pgserver"]
+ignore_missing_imports = true
+implicit_reexport = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "integration: needs a real PostgreSQL (DATABASE_URL_TEST); skipped when unavailable",
+]
+filterwarnings = ["error::DeprecationWarning:app.*"]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

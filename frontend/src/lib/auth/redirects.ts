@@ -1,4 +1,4 @@
-import { LOGIN_PATH } from "./constants";
+import { GMAIL_CALLBACK_PATH, INTEGRATIONS_PATH, LOGIN_PATH } from "./constants";
 
 const MAX_LENGTH = 512;
 const PLACEHOLDER_ORIGIN = "http://placeholder.invalid";
@@ -29,4 +29,16 @@ export function safeNextPath(raw: string | null | undefined, fallback = "/"): st
   if (url.origin !== PLACEHOLDER_ORIGIN) return fallback;
   if (url.pathname === LOGIN_PATH || url.pathname.startsWith("/bff")) return fallback;
   return `${url.pathname}${url.search}`;
+}
+
+/**
+ * What to remember for "after sign-in" when a signed-out visitor asks for a page. Normally the full path and query —
+ * except for Google's OAuth callback: its query holds a one-time authorization code and the `state`, which must not be
+ * copied into the login page's URL (address bar, history, logs, Referer). The code is useless without the server-held
+ * PKCE verifier, and a signed-out owner has to start the connection again anyway, so they are sent to the
+ * integrations page instead.
+ */
+export function loginReturnTarget(pathname: string, search: string): string {
+  if (pathname === GMAIL_CALLBACK_PATH) return INTEGRATIONS_PATH;
+  return `${pathname}${search}`;
 }

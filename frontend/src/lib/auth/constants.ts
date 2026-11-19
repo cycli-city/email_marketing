@@ -9,5 +9,9 @@ export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export const LOGIN_PATH = "/login";
 
+/** Google sends the browser here with a one-time authorization code in the query string (ADR-034). */
+export const GMAIL_CALLBACK_PATH = "/integrations/gmail/callback";
+export const INTEGRATIONS_PATH = "/settings/integrations";
+
 /** Where the browser reaches the backend: always through our own server, never directly (ADR-014). */
 export const BFF_BASE = "/bff";

@@ -5,7 +5,7 @@ import { resolveBackendTarget } from "@/lib/bff/path";
 import { SESSION_COOKIE, SESSION_MAX_AGE_SECONDS } from "./constants";
 import { hardenCookieOptions } from "./cookies";
 import { isTrustedOrigin } from "./origin";
-import { safeNextPath } from "./redirects";
+import { loginReturnTarget, safeNextPath } from "./redirects";
 
 describe("hardenCookieOptions", () => {
   it("always emits HttpOnly + Secure + SameSite=Lax + Path=/ and a bounded lifetime", () => {
@@ -165,5 +165,31 @@ describe("resolveBackendTarget", () => {
     [Array.from({ length: 20 }, () => "a")],
   ])("refuses a traversal / smuggling attempt %j", (segments) => {
     expect(resolveBackendTarget(segments as string[])).toBeNull();
+  });
+});
+
+describe("loginReturnTarget", () => {
+  it("remembers where a signed-out visitor was going, query included", () => {
+    expect(loginReturnTarget("/leads", "?status=new&page=2")).toBe("/leads?status=new&page=2");
+    expect(loginReturnTarget("/system", "")).toBe("/system");
+  });
+
+  it("never copies Google's one-time code or state into the login page's address", () => {
+    const target = loginReturnTarget(
+      "/integrations/gmail/callback",
+      "?code=4%2F0AbCdEf&state=opaque-ciphertext&scope=x",
+    );
+    expect(target).toBe("/settings/integrations");
+    expect(target).not.toMatch(/code|state|opaque|4%2F0/);
+  });
+
+  it("always yields something safeNextPath accepts", () => {
+    for (const [path, search] of [
+      ["/integrations/gmail/callback", "?code=abc"],
+      ["/leads", "?q=1"],
+    ] as const) {
+      const target = loginReturnTarget(path, search);
+      expect(safeNextPath(target, "/fallback")).toBe(target);
+    }
   });
 });

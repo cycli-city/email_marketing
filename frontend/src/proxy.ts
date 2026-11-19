@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { LOGIN_PATH } from "@/lib/auth/constants";
 import { refreshSession, type SessionRefresh } from "@/lib/auth/proxy-session";
+import { loginReturnTarget } from "@/lib/auth/redirects";
 import { buildCsp, generateNonce } from "@/lib/csp";
 
 /**
@@ -39,7 +40,7 @@ export async function proxy(request: NextRequest) {
 
   if (!session.authenticated && !isApiProxy) {
     const login = request.nextUrl.clone();
-    const target = `${pathname}${request.nextUrl.search}`;
+    const target = loginReturnTarget(pathname, request.nextUrl.search);
     login.pathname = LOGIN_PATH;
     login.search = "";
     if (target !== "/") login.searchParams.set("next", target);

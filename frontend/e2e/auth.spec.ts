@@ -75,8 +75,10 @@ test.describe("the login gate", () => {
   test("Google's callback needs a signed-in owner: a signed-out visitor is sent to sign in, not given an error page", async ({
     page,
   }) => {
-    await page.goto("/integrations/gmail/callback?code=abc&state=def");
-    await expect(page).toHaveURL(/\/login\?next=/);
+    await page.goto("/integrations/gmail/callback?code=one-time-code-xyz&state=opaque-state-xyz");
+    await expect(page).toHaveURL(/\/login\?next=%2Fsettings%2Fintegrations$/);
+    // Google's one-time code and state must not be carried into the login page's address, history or logs.
+    expect(page.url()).not.toMatch(/one-time-code-xyz|opaque-state-xyz/);
     await expect(page.getByRole("heading", { name: "AI Outreach Intelligence" })).toBeVisible();
   });
 

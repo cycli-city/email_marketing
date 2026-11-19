@@ -17,6 +17,29 @@ def make(**overrides: object) -> Settings:
     return Settings(_env_file=None, **base)  # type: ignore[arg-type]
 
 
+class TestOwnerEmailsFromTheEnvironment:
+    """Regression: a list-typed setting is read from a REAL environment variable, not from a Python argument.
+
+    pydantic-settings used to JSON-decode ``OWNER_EMAILS`` first, so the documented comma-separated value crashed startup.
+    """
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("owner@example.com", ["owner@example.com"]),
+            ("a@example.com,B@Example.com", ["a@example.com", "b@example.com"]),
+            (" a@example.com , ,b@example.com,A@Example.com ", ["a@example.com", "b@example.com"]),
+            ('["a@example.com", "B@Example.com"]', ["a@example.com", "b@example.com"]),
+            ("", []),
+        ],
+    )
+    def test_every_supported_form_parses(
+        self, monkeypatch: pytest.MonkeyPatch, raw: str, expected: list[str]
+    ) -> None:
+        monkeypatch.setenv("OWNER_EMAILS", raw)
+        assert make().owner_emails == expected
+
+
 class TestDatabaseUrl:
     @pytest.mark.parametrize(
         ("raw", "expected"),

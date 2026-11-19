@@ -59,7 +59,9 @@ def create_app(
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
         app.state.clock = clock
-        http_client = build_http_client(transport=http_transport)
+        # Plain HTTP is allowed to localhost only, and never in production (dev + the CI fake identity provider).
+        loopback_http = not production
+        http_client = build_http_client(transport=http_transport, allow_loopback_http=loopback_http)
         app.state.http_client = http_client
         if settings.supabase_jwks_url and settings.supabase_issuer:
             app.state.token_verifier = TokenVerifier(
@@ -68,6 +70,7 @@ def create_app(
                     http_client,
                     clock,
                     ttl_seconds=settings.auth_jwks_ttl_seconds,
+                    allow_loopback_http=loopback_http,
                 ),
                 VerifierConfig(
                     issuer=settings.supabase_issuer, leeway_seconds=settings.auth_leeway_seconds

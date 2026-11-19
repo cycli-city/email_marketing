@@ -6,14 +6,15 @@ absence of a key means the integration reports ``unconfigured`` — never a cras
 
 from __future__ import annotations
 
+import json
 import os
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from cryptography.fernet import Fernet
 from pydantic import Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 AppEnv = Literal["development", "test", "production"]
 AppRole = Literal["api", "worker", "all"]
@@ -64,7 +65,9 @@ class Settings(BaseSettings):
     supabase_anon_key: SecretStr | None = None
     supabase_service_role_key: SecretStr | None = None
     supabase_jwt_secret: SecretStr | None = None
-    owner_emails: list[str] = Field(default_factory=list)
+    # NoDecode: pydantic-settings would otherwise try to read this env var as JSON and crash on the documented
+    # comma-separated form (`OWNER_EMAILS=a@x.com,b@x.com`) before our parser ever runs.
+    owner_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
     # Require a second factor (Supabase TOTP, AAL2) on top of the password. Enable once MFA is enrolled.
     auth_require_mfa: bool = False
     auth_jwks_ttl_seconds: int = Field(
@@ -125,9 +128,17 @@ class Settings(BaseSettings):
     @field_validator("owner_emails", mode="before")
     @classmethod
     def _split_owner_emails(cls, value: object) -> object:
+        """Accepts ``a@x.com,B@x.com`` (the documented form), a JSON array, or a real list; lower-cases, drops
+        blanks and duplicates, keeps order."""
         if isinstance(value, str):
-            return [part.strip().lower() for part in value.split(",") if part.strip()]
-        return value
+            text = value.strip()
+            parts = json.loads(text) if text.startswith("[") else text.split(",")
+        elif isinstance(value, list | tuple):
+            parts = list(value)
+        else:
+            return value
+        cleaned = (str(part).strip().lower() for part in parts)
+        return list(dict.fromkeys(email for email in cleaned if email))
 
     @field_validator("database_url", "database_url_test")
     @classmethod

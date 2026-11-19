@@ -23,6 +23,7 @@ import jwt
 import structlog
 
 from app.core.clock import Clock
+from app.core.http import is_loopback_http
 
 log = structlog.get_logger("auth.jwks")
 
@@ -79,8 +80,9 @@ class JwksCache:
         ttl_seconds: float = 600.0,
         min_refetch_seconds: float = 30.0,
         max_stale_seconds: float = 86_400.0,
+        allow_loopback_http: bool = False,
     ) -> None:
-        if not url.startswith("https://"):
+        if not (url.startswith("https://") or (allow_loopback_http and is_loopback_http(url))):
             raise ValueError("JWKS URL must be HTTPS")
         self._url = url
         self._client = client

@@ -58,7 +58,7 @@ Rows parked as `WAITING_PROVIDER` carry `retry_after`; the controller re-release
 
 ### 3.3 Crash recovery
 - Stage rows have `status`, `claimed_by`, `claimed_at`, `attempt`. A **janitor cron** returns rows stuck in `*_IN_PROGRESS` past a lease timeout to the previous state (except sends — see §5).
-- Queue rows carry `attempts`/`max_attempts`, `locked_until` leases and `run_at` for backoff; graceful shutdown finishes the current job and releases the rest; cancellation sets a flag the handler checks.
+- Queue rows carry `attempts`/`max_attempts`, `locked_until` leases and `run_at` for backoff; graceful shutdown finishes the current job and releases the rest; cancellation sets a flag the handler checks. Exact semantics (fencing, what consumes an attempt, parking, dead letters, dedupe/outbox): **ADR-030**, code in `backend/app/queue/`.
 - Dead-letter: after max attempts a task writes a `dead_letters` row (task, payload hash, error class, last error, attempts) and surfaces on the Ops page with a *retry* / *discard* action.
 
 ## 4. Provider layer (`app/providers`)

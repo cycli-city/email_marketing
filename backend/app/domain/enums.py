@@ -293,6 +293,16 @@ class TemplateKind(StrEnum):
     REPLY = "reply"
 
 
+class JobStatus(StrEnum):
+    """Lifecycle of a row in ``job_queue`` (the Postgres-backed queue — ADR-024)."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    DEAD = "dead"  # permanently failed → also recorded in dead_letters
+    CANCELLED = "cancelled"
+
+
 class ActorType(StrEnum):
     USER = "user"
     SYSTEM = "system"

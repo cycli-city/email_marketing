@@ -26,6 +26,7 @@ from app.db.models.ops import (
     NotificationPreference,
 )
 from app.db.models.providers import ProviderState, ProviderUsageEvent
+from app.db.models.queue import Job
 from app.db.models.safety import ConsentRecord, JurisdictionPolicy, SuppressionEntry
 from app.db.models.tenancy import User, Workspace
 
@@ -49,6 +50,7 @@ __all__ = [
     "FollowUpSchedule",
     "IncomingReply",
     "IntegrationSetting",
+    "Job",
     "JurisdictionPolicy",
     "Lead",
     "LeadSource",

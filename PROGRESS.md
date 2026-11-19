@@ -11,7 +11,8 @@ Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depe
 | 1b | Security baseline | ✅ | Secret scanner + hooks, nonce CSP, HTTPS/TLS enforcement, rate limiting/DoS controls, supply-chain pinning. `docs/SECURITY.md`. |
 | 1c | **No Redis** (ADR-024) | ✅ | Redis/ARQ removed everywhere; queue will be a Postgres table; rate limiter in-process. |
 | 1d | Public-readiness tooling (ADR-027) | ✅ | `scripts/prepublic_audit.py` (+ CI step), sanitised docs, personal data moved to `.local/`. |
-| 2 | Postgres job queue + provider framework + auth + Gmail | 🚧 **started** — Supabase project + schema live, Groq verified | Queue (`job_queue`, SKIP LOCKED, backoff, janitor) → ProviderManager (failover/credits) → Supabase auth with BFF cookies → Gmail OAuth. Needs Phase-2 keys. |
+| 2a | **Postgres job queue + worker** (ADR-024/030) | ✅ | `app/queue/`: SKIP LOCKED claims, leases + heartbeats, fenced writes, backoff, park/release, dead letters, dedupe/outbox, cooperative cancel, periodic jobs, graceful shutdown, reaper, retention. 83 new tests on real Postgres. Not yet started by the app (wired in with the first real task handlers). |
+| 2 | Provider framework + auth + Gmail | 🚧 **in progress** — Supabase project + schema live, Groq verified, queue done | ProviderManager (failover/credits) → Supabase auth with BFF cookies → Gmail OAuth. Needs Phase-2 keys. |
 | 3 | Lead discovery (Overture/OSM/Geoapify + SSRF-guarded crawler, extraction, verification, qualification) | ⬜ | Sources in `docs/PROVIDERS.md`. |
 | 4 | Outreach (templates, generation, campaigns, sender adapters, approvals, adaptive ramp) | ⬜ | Sending architecture: ADR-025/026. |
 | 5 | Reply intelligence (sync, classify, notify, follow-ups) | ⬜ | |
@@ -20,7 +21,7 @@ Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depe
 | 8 | Deployment (Supabase, Render, Vercel) + docs | ⬜ | Hosting terms open (ADR-023). |
 
 ## Quality gate (local, 2026-11-19)
-Backend: `ruff` ✅ · `ruff format` ✅ · `mypy --strict` ✅ (47 files) · `pytest` ✅ **205 passed** (unit + integration on real PostgreSQL 16) · OpenAPI export current ✅.
+Backend: `ruff` ✅ · `ruff format` ✅ · `mypy --strict` ✅ (60 files) · `pytest` ✅ **294 passed** (unit + integration on real PostgreSQL 16) · OpenAPI export current ✅.
 Frontend: `eslint` (incl. XSS-sink bans) ✅ · `tsc` ✅ · `prettier` ✅ · `vitest` ✅ **35 passed** · `next build` ✅ · **Playwright 22/22 against the real API + Postgres (no Redis)** incl. axe WCAG A/AA, nonce CSP, blocked injection/exfiltration/clickjacking.
 Security/public-readiness: `scan_secrets.py` clean (tree, history, browser bundle) ✅ · `prepublic_audit.py` clean on tree + workflows ✅ · **git history fails the audit by design** (ADR-027) ⇒ publish via a clean-slate repo.
 
@@ -30,6 +31,7 @@ Security/public-readiness: `scan_secrets.py` clean (tree, history, browser bundl
 - Fernet encryption-at-rest with key rotation; purpose-bound signed tokens; injectable clock.
 - Relational schema (34 tables) + verified migration with DB-enforced safety rules (guessed email never verified; one message per campaign/contact/step; idempotency keys; score 0–100; RLS on every table; append-only audit log).
 - FastAPI shell: request-ID, security headers + API CSP, HSTS (prod), HTTP→HTTPS redirect, trusted hosts, in-process rate limiting (bounded memory, spoof-proof client IP), concurrency cap, body-size limit, DB timeouts, uniform error envelope, `/healthz`, `/readyz` (database).
+- Durable Postgres job queue + in-process worker (no Redis): exactly-one claimer under concurrency, crash recovery, zombie-write fencing, retry/backoff with `Retry-After`, parking without burning attempts, dead letters with retry/discard, dedupe keys, graceful shutdown — all proven against a real database (ADR-030).
 - Contract-first pipeline (OpenAPI → generated TS types → typed client) with drift checks.
 - Next.js 16 dashboard shell: responsive sidebar, light/dark, System status page, custom 404/error pages, strict nonce CSP + hardening headers.
 - Secret scanning (hooks, CI, bundle), gitleaks, pre-public audit, GitHub helper that never exposes the token.
@@ -43,7 +45,7 @@ Phases 2–8.
 
 ## Next up (in order)
 1. Push this work to the (still private) repo; confirm CI green without Redis.
-2. Phase 2: Postgres job queue → ProviderManager → auth (BFF) → Gmail OAuth. **I need the Phase-2 keys listed in `.local/SECRETS.local.md`** (Supabase, Groq, Google OAuth).
+2. Phase 2: ~~Postgres job queue~~ ✅ → **ProviderManager** (registry, capability protocols, quotas/credits, cooldown, circuit breaker, failover) + Groq adapter → auth (BFF) → Gmail OAuth. **Still needed from the owner for Gmail OAuth:** the Google Cloud OAuth client (Supabase and Groq are already in `.local/SECRETS.local.md`).
 3. Public publication (only when the owner provides the new repo + new token — ADR-027).
 
 ## Owner action checklist (agreed 2026-11-19)

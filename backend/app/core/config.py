@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     use_mock_providers: bool = False
     controller_tick_seconds: int = 30
     gmail_poll_seconds: int = 90
+    # Run the queue worker and the mailbox scheduler inside this process. None → on, except in tests (which start
+    # background work only when they ask for it).
+    background_enabled: bool | None = None
 
     # ── transport security ───────────────────────────────────
     # Postgres: production requires TLS (`?sslmode=require` in DATABASE_URL). For certificate
@@ -215,6 +218,15 @@ class Settings(BaseSettings):
             return True
         query = dict(parse_qsl(urlsplit(self.database_url).query))
         return query.get("ssl", "").lower() in {"require", "verify-ca", "verify-full", "true"}
+
+    @property
+    def run_background(self) -> bool:
+        """Whether this process runs the job worker: the role says so, and it was not switched off (or, in tests, on)."""
+        if self.app_role == "api":
+            return False
+        if self.background_enabled is not None:
+            return self.background_enabled
+        return self.app_env != "test"
 
     @property
     def effective_trusted_proxies(self) -> int:

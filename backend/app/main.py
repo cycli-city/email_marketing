@@ -9,6 +9,7 @@ import httpx
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app import __version__
@@ -32,12 +33,63 @@ from app.core.middleware import RequestContextMiddleware
 from app.core.ratelimit import InMemoryRateLimiter, Limit
 from app.core.security import Encryptor
 from app.db.session import create_engine, create_session_factory
+from app.integrations.gmail.api import GmailApi
 from app.integrations.gmail.oauth import GoogleClient, OAuthConfig
 from app.integrations.gmail.service import GmailService
+from app.workers.runtime import Background, build_background
 
 logger = structlog.get_logger("app")
 
 HSTS_MAX_AGE_SECONDS = 63_072_000  # two years
+
+
+def _build_gmail_service(
+    settings: Settings,
+    clock: Clock,
+    session_factory: async_sessionmaker[AsyncSession],
+    http_client: httpx.AsyncClient,
+) -> GmailService | None:
+    """The Gmail connection service, or ``None`` when Google credentials or the encryption key are not configured."""
+    client_id, client_secret, redirect_uri = (
+        settings.google_client_id,
+        settings.google_client_secret,
+        settings.google_redirect_uri,
+    )
+    if not (client_id and client_secret and redirect_uri and settings.encryption_keys):
+        return None
+    oauth_config = OAuthConfig(
+        client_id=client_id,
+        client_secret=client_secret.get_secret_value(),
+        redirect_uri=redirect_uri,
+    )
+    return GmailService(
+        session_factory=session_factory,
+        clock=clock,
+        encryptor=Encryptor(settings.encryption_keys),
+        google=GoogleClient(http_client, oauth_config, clock),
+        config=oauth_config,
+    )
+
+
+def _start_background(
+    settings: Settings,
+    clock: Clock,
+    session_factory: async_sessionmaker[AsyncSession],
+    http_client: httpx.AsyncClient,
+    gmail_service: GmailService | None,
+) -> Background | None:
+    """Start the queue worker + mailbox scheduler if this process should run them and there is a mailbox service."""
+    if not settings.run_background or gmail_service is None:
+        return None
+    background = build_background(
+        session_factory=session_factory,
+        clock=clock,
+        gmail=GmailApi(http_client, clock),
+        credentials=gmail_service,
+        poll_seconds=settings.gmail_poll_seconds,
+    )
+    background.start()
+    return background
 
 
 def create_app(
@@ -81,24 +133,12 @@ def create_app(
                 clock,
             )
             app.state.owner_directory = OwnerDirectory(app.state.session_factory, clock)
-        client_id, client_secret, redirect_uri = (
-            settings.google_client_id,
-            settings.google_client_secret,
-            settings.google_redirect_uri,
+        app.state.gmail_service = _build_gmail_service(
+            settings, clock, app.state.session_factory, http_client
         )
-        if client_id and client_secret and redirect_uri and settings.encryption_keys:
-            oauth_config = OAuthConfig(
-                client_id=client_id,
-                client_secret=client_secret.get_secret_value(),
-                redirect_uri=redirect_uri,
-            )
-            app.state.gmail_service = GmailService(
-                session_factory=app.state.session_factory,
-                clock=clock,
-                encryptor=Encryptor(settings.encryption_keys),
-                google=GoogleClient(http_client, oauth_config, clock),
-                config=oauth_config,
-            )
+        app.state.background = _start_background(
+            settings, clock, app.state.session_factory, http_client, app.state.gmail_service
+        )
         logger.info(
             "app.started",
             env=settings.app_env,
@@ -109,6 +149,8 @@ def create_app(
         try:
             yield
         finally:
+            if app.state.background is not None:
+                await app.state.background.stop()
             await http_client.aclose()
             await engine.dispose()
             logger.info("app.stopped")

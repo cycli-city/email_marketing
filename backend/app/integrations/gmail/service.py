@@ -397,7 +397,7 @@ class GmailService:
             try:
                 fresh = await self._google.refresh(refresh_plain)
             except AccountNeedsReauthError:
-                await self._mark_needs_reauth(workspace_id, account_id)
+                await self.mark_needs_reauth(workspace_id, account_id)
                 raise
             await self._save_refreshed(workspace_id, account_id, fresh)
             return fresh.access_token
@@ -423,7 +423,8 @@ class GmailService:
                 account.status = AccountStatus.ACTIVE
                 account.last_error = None
 
-    async def _mark_needs_reauth(self, workspace_id: uuid.UUID, account_id: uuid.UUID) -> None:
+    async def mark_needs_reauth(self, workspace_id: uuid.UUID, account_id: uuid.UUID) -> None:
+        """Google refused this mailbox's credentials: stop using it and ask the owner to reconnect. Idempotent."""
         now = self._clock.now()
         async with session_scope(self._sessions) as session:
             account = await self._account(session, workspace_id, account_id)
@@ -450,5 +451,5 @@ class GmailService:
         try:
             return await self._google.gmail_profile(token)
         except AccountNeedsReauthError:
-            await self._mark_needs_reauth(workspace_id, account_id)
+            await self.mark_needs_reauth(workspace_id, account_id)
             raise

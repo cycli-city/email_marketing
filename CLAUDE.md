@@ -27,6 +27,17 @@
 9. **No real emails to third parties in tests or dev.** A real-send smoke test is allowed only to the owner's own address, after explicit confirmation.
 10. Metrics shown in the UI come from the database only. No hardcoded demo numbers, no dead buttons, no `TODO` for core behaviour, no swallowed errors, no secrets in frontend code.
 
+### 1b. Security rules (owner priority: "maximum security", also stated 2026-11-19: HTTPS everywhere, no secrets or keys in git or the frontend)
+Full model in `docs/SECURITY.md`; decisions ADR-014…020. Non-negotiable:
+- **Never** put a real credential in any tracked file, test, log, commit message, PR or the frontend. Real values live only in `.local/SECRETS.local.md`
+  and host secret stores. `scripts/scan_secrets.py` (pre-commit, pre-push, CI) knows the *actual* local values — if it blocks you, fix the cause; never bypass.
+- Git hooks are enabled with `git config core.hooksPath .githooks` (already set here). Never use `--no-verify`. `SKIP_PREPUSH_CHECKS=1` skips only the slow gates, never the secret scan.
+- Push with `python scripts/github.py push` (token via environment only). Watch CI with `python scripts/github.py wait`; read failures with `rlogs RUN_ID STEP_NAME`.
+- Frontend: strict nonce CSP in `src/proxy.ts`; pages are dynamic; **no** `dangerouslySetInnerHTML`/`eval`/inline `<style>`/`javascript:` (ESLint enforces). New UI libs must support CSP nonces (check before adding — `sonner` did not).
+- Backend: production config must keep TLS-to-everything validators passing; every new public route needs rate-limit consideration; outbound HTTP is HTTPS-only, no cross-host redirects; any code that fetches a user/third-party-supplied URL must go through the SSRF guard (Phase 3).
+- Add or change a security control ⇒ add a test that **proves it blocks the attack**, then update `docs/SECURITY.md`.
+- Pin third-party GitHub Actions to commit SHAs (resolve via the API; Dependabot updates them); keep build-only tooling in `devDependencies`.
+
 ## 2. Pre-flight for each work session
 1. Read `PROGRESS.md` (what's done / next) and skim `docs/DECISIONS.md`.
 2. `git status` / `git log -5`; make sure the working tree is understood.

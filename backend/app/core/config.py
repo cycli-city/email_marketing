@@ -95,6 +95,24 @@ class Settings(BaseSettings):
     controller_tick_seconds: int = 30
     gmail_poll_seconds: int = 90
 
+    # ── transport security ───────────────────────────────────
+    # Postgres: production requires TLS (`?sslmode=require` in DATABASE_URL). For certificate
+    # verification (protects against MITM) point this at the provider's CA bundle (Supabase publishes one).
+    database_ssl_ca_file: str | None = None
+    # Redis: production requires `rediss://`. Set only for a private-network Redis you fully control.
+    redis_allow_plaintext: bool = False
+
+    # ── abuse / DoS controls (see docs/SECURITY.md) ──────────
+    # Number of reverse proxies in front of the app (Render = 1). Decides which X-Forwarded-* entries
+    # are trustworthy; unset → 1 in production, 0 elsewhere. A wrong value either lets clients spoof
+    # their IP (too low) or makes every client look like the proxy (too high).
+    trusted_proxy_count: int | None = Field(default=None, ge=0, le=5)
+    rate_limit_per_minute: int = Field(default=300, ge=1)
+    rate_limit_sensitive_per_minute: int = Field(default=20, ge=1)
+    max_request_bytes: int = Field(default=1_000_000, ge=1_024)
+    max_in_flight_requests: int = Field(default=200, ge=1)
+    db_statement_timeout_ms: int = Field(default=30_000, ge=1_000)
+
     @field_validator("owner_emails", mode="before")
     @classmethod
     def _split_owner_emails(cls, value: object) -> object:
@@ -122,27 +140,47 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _production_requirements(self) -> Settings:
+        """Refuse to start in production with missing secrets or unencrypted transport."""
         if self.app_env != "production":
             return self
-        missing: list[str] = []
+        problems = [*self._secret_problems(), *self._transport_problems()]
+        if problems:
+            raise ValueError("Invalid production configuration: " + ", ".join(problems))
+        return self
+
+    def _secret_problems(self) -> list[str]:
+        problems: list[str] = []
         if not self.encryption_key.get_secret_value():
-            missing.append("ENCRYPTION_KEY")
+            problems.append("ENCRYPTION_KEY")
         if len(self.jwt_secret.get_secret_value()) < 32:
-            missing.append("JWT_SECRET (>= 32 chars)")
+            problems.append("JWT_SECRET (>= 32 chars)")
         if not self.supabase_url:
-            missing.append("SUPABASE_URL")
+            problems.append("SUPABASE_URL")
         if not self.owner_emails:
-            missing.append("OWNER_EMAILS")
+            problems.append("OWNER_EMAILS")
         if self.use_mock_providers:
-            missing.append("USE_MOCK_PROVIDERS must be false in production")
+            problems.append("USE_MOCK_PROVIDERS must be false in production")
+        return problems
+
+    def _transport_problems(self) -> list[str]:
+        """HTTPS / TLS everywhere: public URLs, identity endpoints, Postgres and Redis."""
+        problems: list[str] = []
         # Unsubscribe links and OAuth redirects are built from these — a localhost/http value would
         # ship broken opt-outs in real emails (compliance bug), so refuse to start.
         for name, value in (("FRONTEND_URL", self.frontend_url), ("BACKEND_URL", self.backend_url)):
             if not value.startswith("https://") or "localhost" in value or "127.0.0.1" in value:
-                missing.append(f"{name} must be a public https:// URL")
-        if missing:
-            raise ValueError("Invalid production configuration: " + ", ".join(missing))
-        return self
+                problems.append(f"{name} must be a public https:// URL")
+        if self.supabase_url and not self.supabase_url.startswith("https://"):
+            problems.append("SUPABASE_URL must be https://")
+        if self.google_redirect_uri and not self.google_redirect_uri.startswith("https://"):
+            problems.append("GOOGLE_REDIRECT_URI must be https://")
+        if not self.database_requires_tls:
+            problems.append(
+                "DATABASE_URL must enforce TLS (append ?sslmode=require, or set DATABASE_SSL_CA_FILE)"
+            )
+        if not self.redis_url.startswith("rediss://") and not self.redis_allow_plaintext:
+            problems.append("REDIS_URL must use rediss:// (TLS), or set REDIS_ALLOW_PLAINTEXT=true")
+        return problems
 
     # ── derived helpers ──────────────────────────────────────
     @property
@@ -151,6 +189,32 @@ class Settings(BaseSettings):
         if self.app_env != "production":
             origins.update({"http://localhost:3000", "http://127.0.0.1:3000"})
         return sorted(origins)
+
+    @property
+    def database_requires_tls(self) -> bool:
+        """True when the DB URL forces TLS (``ssl=require|verify-ca|verify-full``) or a CA file is set."""
+        if self.database_ssl_ca_file:
+            return True
+        query = dict(parse_qsl(urlsplit(self.database_url).query))
+        return query.get("ssl", "").lower() in {"require", "verify-ca", "verify-full", "true"}
+
+    @property
+    def effective_trusted_proxies(self) -> int:
+        if self.trusted_proxy_count is not None:
+            return self.trusted_proxy_count
+        return 1 if self.app_env == "production" else 0
+
+    @property
+    def public_host(self) -> str:
+        """Host of BACKEND_URL — used for redirects so a forged Host header can never steer them."""
+        return urlsplit(self.backend_url).netloc
+
+    @property
+    def allowed_hosts(self) -> list[str]:
+        hosts = {urlsplit(self.backend_url).hostname or ""}
+        if self.app_env != "production":
+            hosts.update({"localhost", "127.0.0.1", "test", "testserver"})
+        return sorted(h for h in hosts if h)
 
     @property
     def encryption_keys(self) -> list[str]:

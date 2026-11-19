@@ -18,17 +18,29 @@ _SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
     "Cross-Origin-Resource-Policy": "same-site",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "X-Permitted-Cross-Domain-Policies": "none",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
     # API responses are JSON; never cache authenticated data in shared caches.
     "Cache-Control": "no-store",
 }
+# The API serves data, not documents: nothing it returns should ever be rendered, framed or scripted.
+_API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 
 logger = structlog.get_logger("http")
 
 
 class RequestContextMiddleware:
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        hsts_max_age: int | None = None,
+        csp_exempt_prefixes: tuple[str, ...] = ("/docs", "/openapi.json"),
+    ) -> None:
         self.app = app
+        self.hsts_max_age = hsts_max_age
+        self.csp_exempt_prefixes = csp_exempt_prefixes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -45,6 +57,7 @@ class RequestContextMiddleware:
         )
         started = time.perf_counter()
         status_code = 500
+        apply_csp = not scope["path"].startswith(self.csp_exempt_prefixes)
 
         async def send_wrapper(message: Message) -> None:
             nonlocal status_code
@@ -54,6 +67,16 @@ class RequestContextMiddleware:
                 headers["X-Request-ID"] = request_id
                 for key, value in _SECURITY_HEADERS.items():
                     headers.setdefault(key, value)
+                if apply_csp:
+                    headers.setdefault("Content-Security-Policy", _API_CSP)
+                if self.hsts_max_age:
+                    headers.setdefault(
+                        "Strict-Transport-Security",
+                        f"max-age={self.hsts_max_age}; includeSubDomains",
+                    )
+                # Don't advertise the server stack.
+                if "server" in headers:
+                    del headers["server"]
             await send(message)
 
         try:

@@ -1,44 +1,13 @@
 from __future__ import annotations
 
 import re
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 
-import httpx
 import pytest
-from cryptography.fernet import Fernet
-from fakeredis import FakeAsyncRedis
-from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app import __version__
-from app.core.config import Settings
 from app.core.errors import ComplianceBlockedError, NotFoundError, RateLimitedError
-from app.main import create_app
-
-UNREACHABLE_DB = "postgresql+asyncpg://nobody:nopass@127.0.0.1:1/none"
-
-
-def make_settings(**overrides: object) -> Settings:
-    base: dict[str, object] = {
-        "encryption_key": Fernet.generate_key().decode(),
-        "jwt_secret": "j" * 40,
-        "database_url": UNREACHABLE_DB,
-    }
-    base.update(overrides)
-    return Settings(_env_file=None, **base)  # type: ignore[arg-type]
-
-
-@asynccontextmanager
-async def running(
-    settings: Settings | None = None, redis: object | None = None
-) -> AsyncIterator[tuple[FastAPI, httpx.AsyncClient]]:
-    app = create_app(settings or make_settings(), redis=redis or FakeAsyncRedis())  # type: ignore[arg-type]
-    async with app.router.lifespan_context(app):
-        # raise_app_exceptions=False lets us observe the 500 response the server would really send.
-        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            yield app, client
+from tests.helpers import make_production_settings, make_settings, running
 
 
 class Payload(BaseModel):
@@ -183,14 +152,10 @@ class TestCors:
 
 
 async def test_docs_are_hidden_in_production() -> None:
-    settings = make_settings(
-        app_env="production",
-        supabase_url="https://x.supabase.co",
-        owner_emails="me@example.com",
-        frontend_url="https://app.example.com",
-        backend_url="https://api.example.com",
-    )
-    async with running(settings) as (_, client):
+    async with running(make_production_settings(), base_url="https://api.example.com") as (
+        _,
+        client,
+    ):
         assert (await client.get("/docs")).status_code == 404
         assert (await client.get("/openapi.json")).status_code == 404
 

@@ -9,16 +9,27 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from redis.asyncio import Redis
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app import __version__
 from app.api import health
 from app.api.errors import install_error_handlers
 from app.core.config import Settings, get_settings
+from app.core.hardening import (
+    BodySizeLimitMiddleware,
+    ConcurrencyLimitMiddleware,
+    HTTPSEnforcementMiddleware,
+    RateLimitMiddleware,
+    Rule,
+)
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.core.ratelimit import FallbackRateLimiter, InMemoryRateLimiter, Limit, RedisRateLimiter
 from app.db.session import create_engine, create_session_factory
 
 logger = structlog.get_logger("app")
+
+HSTS_MAX_AGE_SECONDS = 63_072_000  # two years
 
 
 def create_app(settings: Settings | None = None, *, redis: Redis | None = None) -> FastAPI:
@@ -57,18 +68,48 @@ def create_app(settings: Settings | None = None, *, redis: Redis | None = None) 
     )
     app.state.settings = settings
 
+    trusted = settings.effective_trusted_proxies
+    limiter = FallbackRateLimiter(
+        RedisRateLimiter(
+            lambda: app.state.redis
+        ),  # resolved lazily: Redis is created in the lifespan
+        InMemoryRateLimiter(),
+    )
+    sensitive = Limit("sensitive", settings.rate_limit_sensitive_per_minute)
+    rules = [
+        Rule("/api/v1/auth", sensitive),
+        Rule("/api/v1/integrations/gmail/callback", sensitive),
+        Rule("/u/", Limit("unsubscribe", settings.rate_limit_sensitive_per_minute)),
+        Rule("/webhooks/", Limit("webhook", 600)),
+    ]
+
+    # Middleware stack — add_middleware() wraps, so the LAST added is the OUTERMOST layer.
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_bytes)
+    app.add_middleware(
+        RateLimitMiddleware,
+        limiter=limiter,
+        rules=rules,
+        default=Limit("api", settings.rate_limit_per_minute),
+        trusted_proxies=trusted,
+    )
+    app.add_middleware(ConcurrencyLimitMiddleware, max_in_flight=settings.max_in_flight_requests)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=False,  # auth is a bearer token, never cookies ⇒ no CSRF surface
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
-        expose_headers=["X-Request-ID", "Retry-After"],
+        expose_headers=["X-Request-ID", "Retry-After", "RateLimit-Limit", "RateLimit-Remaining"],
         max_age=600,
     )
-    app.add_middleware(
-        RequestContextMiddleware
-    )  # outermost: sees every response, incl. CORS preflight
+    if production:
+        app.add_middleware(
+            HTTPSEnforcementMiddleware, public_host=settings.public_host, trusted_proxies=trusted
+        )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+    app.add_middleware(  # outermost: sees every response, incl. CORS preflight and rejections
+        RequestContextMiddleware, hsts_max_age=HSTS_MAX_AGE_SECONDS if production else None
+    )
     install_error_handlers(app)
 
     app.include_router(health.router)

@@ -1,5 +1,8 @@
 name: CI
 
+# Third-party actions are pinned to immutable commit SHAs (a retagged action cannot silently change what we run).
+# Dependabot (github-actions ecosystem) keeps these SHAs current via PRs.
+
 on:
   push:
     branches: [main]
@@ -45,8 +48,10 @@ jobs:
       REDIS_URL_TEST: redis://localhost:6379/1
       REQUIRE_INTEGRATION: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
@@ -60,9 +65,9 @@ jobs:
         run: uv run mypy
       - name: Tests (unit + integration)
         run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
-      - name: Dependency vulnerability audit
-        run: >-
-          uv export --frozen --no-hashes --no-emit-project -o /tmp/requirements.txt &&
+      - name: Dependency vulnerability audit (hash-pinned lockfile export)
+        run: |
+          uv export --frozen --no-emit-project -o /tmp/requirements.txt
           uvx pip-audit -r /tmp/requirements.txt --disable-pip
 
   frontend:
@@ -73,14 +78,16 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - name: Lint
+      - name: Lint (includes XSS-sink bans)
         run: npm run lint
       - name: Type check
         run: npm run typecheck
@@ -90,6 +97,8 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      - name: Browser bundle must not contain secrets or server-only names
+        run: python3 ../scripts/scan_secrets.py --path .next/static --forbid-names --allow-anon-jwt
       - name: Dependency audit (production deps)
         run: npm audit --omit=dev --audit-level=high
 
@@ -98,12 +107,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: backend/uv.lock
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -142,12 +153,14 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       APP_ENV: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          enable-cache: true
-          cache-dependency-glob: backend/uv.lock
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      # No uv cache here: a single `uv sync` is cheap, and the cache-prune post step failed in this job.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -161,7 +174,7 @@ jobs:
       - name: Start API
         working-directory: backend
         run: |
-          nohup uv run uvicorn app.main:app_factory --factory --port 8000 > /tmp/api.log 2>&1 &
+          nohup uv run uvicorn app.main:app_factory --factory --port 8000 --no-server-header > /tmp/api.log 2>&1 &
           curl --retry 40 --retry-connrefused --retry-delay 1 -sf http://localhost:8000/readyz
       - name: Build frontend
         working-directory: frontend
@@ -174,7 +187,7 @@ jobs:
         run: npx playwright test
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report
           path: frontend/playwright-report
@@ -184,12 +197,22 @@ jobs:
         run: cat /tmp/api.log
 
   secret-scan:
-    name: Secret scan (gitleaks)
+    name: Secret scan (repo scanner + gitleaks, full history)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+      - name: Repository scanner (tree + history + forbidden files)
+        run: python3 scripts/scan_secrets.py --tree --history
+      - name: Install gitleaks (pinned version, checksum-verified)
+        run: |
+          set -euo pipefail
+          curl -sSfL -o gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+      - name: gitleaks (full git history)
+        run: ./gitleaks git --redact --no-banner --verbose .

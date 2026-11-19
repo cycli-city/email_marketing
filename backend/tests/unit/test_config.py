@@ -5,6 +5,7 @@ from cryptography.fernet import Fernet
 from pydantic import ValidationError
 
 from app.core.config import Settings, to_async_database_url
+from tests.helpers import PROD_OVERRIDES
 
 GOOD_KEY = Fernet.generate_key().decode()
 GOOD_JWT = "j" * 40
@@ -56,13 +57,7 @@ class TestEncryptionKeyValidation:
 
 
 class TestProductionGuards:
-    PROD: dict[str, object] = {
-        "app_env": "production",
-        "supabase_url": "https://x.supabase.co",
-        "owner_emails": "me@example.com",
-        "frontend_url": "https://app.example.com",
-        "backend_url": "https://api.example.com",
-    }
+    PROD: dict[str, object] = PROD_OVERRIDES
 
     def test_production_requires_secrets(self) -> None:
         # explicit empty values: the test environment itself provides ENCRYPTION_KEY / JWT_SECRET
@@ -96,6 +91,94 @@ class TestProductionGuards:
         s = make(**self.PROD)
         assert s.app_env == "production"
         assert s.cors_origins == ["https://app.example.com"]  # dev origins are dev-only
+
+    # ── HTTPS / TLS everywhere ───────────────────────────────
+    @pytest.mark.parametrize(
+        "database_url",
+        [
+            "postgresql://u:p@db.example.com:5432/postgres",  # no TLS parameter at all
+            "postgresql://u:p@db.example.com:5432/postgres?sslmode=disable",
+            "postgresql://u:p@db.example.com:5432/postgres?sslmode=prefer",  # may silently downgrade
+        ],
+    )
+    def test_production_requires_tls_to_postgres(self, database_url: str) -> None:
+        with pytest.raises(ValidationError) as exc:
+            make(**{**self.PROD, "database_url": database_url})
+        assert "DATABASE_URL must enforce TLS" in str(exc.value)
+
+    @pytest.mark.parametrize("mode", ["require", "verify-ca", "verify-full"])
+    def test_postgres_tls_modes_are_accepted(self, mode: str) -> None:
+        url = f"postgresql://u:p@db.example.com:5432/postgres?sslmode={mode}"
+        assert make(**{**self.PROD, "database_url": url}).database_requires_tls
+
+    def test_a_ca_file_counts_as_enforced_tls(self) -> None:
+        s = make(
+            **{
+                **self.PROD,
+                "database_url": "postgresql://u:p@db.example.com:5432/postgres",
+                "database_ssl_ca_file": "/etc/ssl/supabase-ca.crt",
+            }
+        )
+        assert s.database_requires_tls
+
+    def test_production_requires_tls_to_redis_unless_explicitly_allowed(self) -> None:
+        with pytest.raises(ValidationError) as exc:
+            make(**{**self.PROD, "redis_url": "redis://red-abc:6379"})
+        assert "rediss://" in str(exc.value)
+        allowed = make(
+            **{**self.PROD, "redis_url": "redis://red-abc:6379", "redis_allow_plaintext": True}
+        )
+        assert allowed.redis_allow_plaintext
+
+    @pytest.mark.parametrize(
+        ("field", "value", "needle"),
+        [
+            ("supabase_url", "http://x.supabase.co", "SUPABASE_URL must be https"),
+            (
+                "google_redirect_uri",
+                "http://api.example.com/cb",
+                "GOOGLE_REDIRECT_URI must be https",
+            ),
+        ],
+    )
+    def test_production_rejects_plain_http_identity_endpoints(
+        self, field: str, value: str, needle: str
+    ) -> None:
+        with pytest.raises(ValidationError) as exc:
+            make(**{**self.PROD, field: value})
+        assert needle in str(exc.value)
+
+    def test_development_does_not_require_tls(self) -> None:
+        s = make(
+            app_env="development",
+            database_url="postgresql://u:p@localhost/db",
+            redis_url="redis://localhost",
+        )
+        assert s.app_env == "development"
+
+
+class TestProxyTrustAndHosts:
+    def test_trusted_proxies_default_to_one_in_production_and_zero_elsewhere(self) -> None:
+        assert make(**TestProductionGuards.PROD).effective_trusted_proxies == 1
+        assert make().effective_trusted_proxies == 0
+
+    def test_explicit_trusted_proxy_count_wins(self) -> None:
+        assert (
+            make(
+                **{**TestProductionGuards.PROD, "trusted_proxy_count": 2}
+            ).effective_trusted_proxies
+            == 2
+        )
+        assert make(trusted_proxy_count=0).effective_trusted_proxies == 0
+
+    def test_allowed_hosts_are_only_the_public_backend_host_in_production(self) -> None:
+        assert make(**TestProductionGuards.PROD).allowed_hosts == ["api.example.com"]
+
+    def test_development_also_allows_local_hosts(self) -> None:
+        assert {"localhost", "127.0.0.1"} <= set(make().allowed_hosts)
+
+    def test_public_host_comes_from_configuration(self) -> None:
+        assert make(**TestProductionGuards.PROD).public_host == "api.example.com"
 
     def test_dev_cors_includes_localhost(self) -> None:
         assert "http://localhost:3000" in make().cors_origins

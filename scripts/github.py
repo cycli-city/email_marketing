@@ -155,6 +155,24 @@ def cmd_logs(job_id: int, tail: int = 80) -> None:
     print("\n".join(text.splitlines()[-tail:]))
 
 
+def cmd_run_logs(run_id: int, needle: str, tail: int = 60) -> None:
+    """Print the tail of every step log whose file name contains `needle` (from the run's log archive)."""
+    import io
+    import zipfile
+
+    archive = api("GET", f"/repos/{OWNER}/{REPO}/actions/runs/{run_id}/logs", raw=True)
+    with zipfile.ZipFile(io.BytesIO(archive)) as zf:
+        names = [n for n in zf.namelist() if needle.lower() in n.lower() and n.endswith(".txt")]
+        if not names:
+            print("no matching step logs; available:")
+            print("\n".join(sorted(zf.namelist())[:80]))
+            return
+        for name in sorted(names):
+            print(f"\n──────── {name} ────────")
+            lines = zf.read(name).decode(errors="replace").splitlines()
+            print("\n".join(re.sub(r"^\S+Z ", "", line) for line in lines[-tail:]))
+
+
 def main(argv: list[str]) -> None:
     if not argv:
         sys.exit(__doc__)
@@ -170,6 +188,8 @@ def main(argv: list[str]) -> None:
         cmd_wait(sha)
     elif cmd == "logs":
         cmd_logs(int(rest[0]))
+    elif cmd == "rlogs":  # rlogs RUN_ID NAME_FILTER [TAIL]
+        cmd_run_logs(int(rest[0]), rest[1], int(rest[2]) if len(rest) > 2 else 60)
     elif cmd == "api":
         body = json.loads(rest[2]) if len(rest) > 2 else None
         print(json.dumps(api(rest[0], rest[1], body), indent=2))

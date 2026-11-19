@@ -46,6 +46,16 @@ uv run uvicorn app.main:app_factory --factory --reload
 Integration tests need a real PostgreSQL. Locally they use the pip-installed `pgserver` (a real Postgres 16
 binary — no Docker). In CI they use a Postgres service container. See [`docs/DECISIONS.md`](docs/DECISIONS.md) ADR-006.
 
+## Security tooling (set up once per clone)
+
+```powershell
+git config core.hooksPath .githooks        # pre-commit: secret scan · pre-push: secret scan + lint/type/unit gates
+python scripts/scan_secrets.py --tree      # scan tracked files (also: --history, --staged, --path DIR)
+```
+
+Never commit real credentials: put them in `.local/SECRETS.local.md` (git-ignored) and your host's secret store.
+Threat model, controls and honest limits: [`docs/SECURITY.md`](docs/SECURITY.md).
+
 ## Repository layout
 
 ```

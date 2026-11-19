@@ -3,7 +3,8 @@ name = "aoi-backend"
 version = "0.1.0"
 description = "AI Outreach Intelligence — backend (FastAPI + ARQ workers)"
 readme = "README.md"
-requires-python = ">=3.11"
+# Upper bound keeps dependency resolution (and Dependabot) from failing for Pythons that don't exist yet.
+requires-python = ">=3.11,<3.14"
 dependencies = [
     # web
     "fastapi>=0.115",
@@ -18,7 +19,7 @@ dependencies = [
     "alembic>=1.14",
     # queue / cache
     "arq>=0.26",
-    "redis>=5.2",
+    "redis>=5.2,<6",  # arq 0.26 requires redis<6; an unbounded range lets automated bumps break the queue
     # http + security
     "httpx>=0.28",
     "cryptography>=43",
@@ -48,6 +49,7 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "pip-audit>=2.7",
+    "pgserver>=0.1.4",  # real PostgreSQL for integration tests/dev without Docker (CI uses a service container)
     "types-beautifulsoup4",
     "lxml-stubs",
 ]

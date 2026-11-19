@@ -7,46 +7,51 @@ Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depe
 ## Phase status
 | # | Phase | Status | Notes |
 |---|---|---|---|
-| 1 | Architecture & scaffold | ✅ locally verified · CI workflows written but **not yet run on GitHub** (needs push → GitHub token) | Backend, schema, API shell, Next.js shell, contract pipeline, E2E all proven on a real stack. |
-| 2 | Auth + integrations (Supabase JWT, Gmail OAuth, Groq, Redis/ARQ, provider framework) | ⬜ next | Starting with the provider framework (no credentials needed). |
-| 3 | Lead discovery (crawler, extraction, verification, qualification) | ⬜ | |
+| 1 | Architecture & scaffold | ✅ | Backend, 34-table schema, API shell, Next.js shell, contract pipeline, E2E. **Pushed to GitHub; first CI run found and fixed real issues** (see below). |
+| 1b | Security baseline | ✅ | Secret scanner + hooks, nonce CSP, HTTPS/TLS enforcement, rate limiting/DoS controls, supply-chain pinning. `docs/SECURITY.md`. |
+| 2 | Auth + integrations (BFF cookie sessions, Supabase JWT, provider framework, Groq, Gmail OAuth, ARQ) | ⬜ **next** | Provider failover framework needs no credentials; Supabase keys needed for auth. |
+| 3 | Lead discovery (crawler + SSRF guard, extraction, verification, qualification) | ⬜ | |
 | 4 | Outreach (templates, generation, campaigns, Gmail send, approvals, limits) | ⬜ | |
 | 5 | Reply intelligence (sync, classify, notify, follow-ups) | ⬜ | |
 | 6 | Dashboard (all pages + System Operations) | ⬜ | Shell + System status page exist. |
 | 7 | Testing & hardening | ⬜ | |
-| 8 | Deployment (Supabase, Render, Vercel) + docs | ⬜ | |
+| 8 | Deployment (Supabase, Render free + UptimeRobot, Vercel) + docs | ⬜ | Hosting decided (ADR-008). |
 
 ## Quality gate (local, 2026-11-19)
-Backend: `ruff check` ✅ · `ruff format --check` ✅ · `mypy --strict` ✅ (38 files) · `pytest` ✅ **76 passed** (59 unit / 17 integration on real PostgreSQL 16) · coverage 97 % · OpenAPI export up to date ✅.
-Frontend: `eslint` ✅ · `tsc` ✅ · `prettier` ✅ · `vitest` ✅ **14 passed** · `next build` ✅ · **Playwright 10/10 against the real stack** (API + Postgres + Redis) incl. axe WCAG 2.1 A/AA in light + dark, mobile nav, degraded/unreachable states.
+Backend: `ruff` ✅ · `ruff format` ✅ · `mypy --strict` ✅ (46 files) · `pytest` ✅ **188 passed** (unit + integration on real PostgreSQL 16) · OpenAPI export current ✅ · `pip-audit` (hash-verified) ✅ no known vulnerabilities.
+Frontend: `eslint` (incl. XSS-sink bans) ✅ · `tsc` ✅ · `prettier` ✅ · `vitest` ✅ **35 passed** · `next build` ✅ (all routes dynamic) · `npm audit` production tree ✅ **0 vulnerabilities** · **Playwright 22/22 against the real stack** (API + Postgres + Redis): axe WCAG 2.1 A/AA light+dark, mobile, nonce CSP with zero violations, injected inline script / remote script / event handler / `javascript:` link **blocked**, cross-origin exfiltration **blocked**, clickjacking **blocked**.
+Secrets: `scan_secrets.py` ✅ clean on tree, full git history and the built browser bundle.
+
+## First GitHub CI run (2026-11-19) — what it found
+✅ Frontend, API-contract, backend py3.11 + py3.12 tests (real Postgres + Redis service containers) and E2E (10/10) passed on GitHub.
+Fixed after reading the logs: `pip-audit --disable-pip` needs a hashed export (my flag); gitleaks *action* fails on a first push → replaced with a pinned, checksum-verified binary; setup-uv cache-prune post-step crashed in the E2E job → cache disabled there; Dependabot exposed that `arq` caps `redis<6` → capped + `requires-python <3.14`; `pgserver` had never been declared as a dev dependency → declared. All actions now pinned to commit SHAs.
+**The corrected CI has not run yet — it runs on the next push.**
 
 ## Feature-completion report (REQUIREMENTS.md §21)
 ### Fully implemented and tested
-- Typed settings for every spec env var; production guards (secrets present, https public URLs, no mock providers).
-- Fernet encryption-at-rest with key rotation; purpose-bound signed tokens (unsubscribe/OAuth-state) incl. expiry + alg-none rejection.
-- Injectable clock (`Clock`/`FakeClock`).
-- Relational schema (34 tables) + Alembic migration verified: upgrade → `alembic check` (no drift) → downgrade → upgrade. DB-enforced rules: guessed email can never be `verified`; unique contact email per workspace; one message per (campaign, contact, step); idempotency keys; score 0–100; enum CHECKs match Python enums; **RLS enabled on every table**; **append-only audit log** (trigger); full-text search on companies/contacts; message history survives lead deletion.
-- FastAPI shell: request-ID + security-headers middleware, uniform error envelope (no value echo, no stack leaks), CORS locked to `FRONTEND_URL`, `/healthz`, `/readyz` (DB + Redis, verified under 12 concurrent probes), docs hidden in production.
-- Contract-first pipeline: OpenAPI export → generated TS types → typed client (`openapi-fetch`), with drift checks.
-- Next.js 16 dashboard shell: responsive sidebar, light/dark theme, System status page driven by live backend health.
-- Local dev without Docker: throw-away Postgres (`pgserver`), in-memory Redis (`dev_redis.py`).
+- Typed settings for every spec env var; production guards: secrets present, public https URLs, **TLS-enforced Postgres, rediss Redis**, no mock providers.
+- Fernet encryption-at-rest with key rotation; purpose-bound signed tokens (unsubscribe/OAuth-state).
+- Injectable clock; relational schema (34 tables) + verified migration with DB-enforced safety rules (guessed email never verified; one message per campaign/contact/step; idempotency keys; score 0–100; RLS on every table; append-only audit log).
+- FastAPI shell: request-ID, security headers + API CSP, HSTS (prod), HTTP→HTTPS redirect, trusted hosts, rate limiting (Redis + in-memory fallback), spoof-proof client IP, concurrency cap, body-size limit, DB timeouts, uniform error envelope, `/healthz`, `/readyz`.
+- Contract-first pipeline (OpenAPI → generated TS types → typed client) with drift checks.
+- Next.js 16 dashboard shell: responsive sidebar, light/dark themes, System status page (live backend health), custom 404 + error pages, strict nonce CSP + hardening headers.
+- Secret scanning: pre-commit/pre-push hooks, CI (tree + history + bundle), gitleaks; GitHub helper that never exposes the token.
 ### Implemented but awaiting credentials
 _none yet_
 ### Dependent on external approval
 - Gmail restricted scope (`gmail.readonly`/`modify`): owner-only "In production (unverified)" mode is enough for personal use (ADR-009/012).
 ### Not yet implemented
-Phases 2–8 (auth, providers/failover, Gmail, discovery, generation, campaigns/controller, reply intelligence, dashboard pages, deployment, Dockerfile/render.yaml, runbooks).
+Phases 2–8 (auth/BFF sessions, provider failover, Gmail, discovery + SSRF guard, generation, campaigns/controller, reply intelligence, dashboard pages, deployment, Dockerfile/render config, runbooks).
 
 ## Next up (in order)
-1. **Push to GitHub** (needs owner's GitHub token) and prove all CI jobs green — CI is the one unproven piece.
-2. Phase 2: provider framework (registry, manager, retry engine, usage/credit tracking, failover) with mock providers → Groq adapter → queue abstraction + ARQ worker skeleton → Supabase JWT auth + owner allow-list → Gmail OAuth + token store.
+1. Commit + push this security work; confirm all CI jobs green on GitHub.
+2. Phase 2: provider framework (registry, manager, retry engine, usage/credit tracking, failover) with mock providers → Groq adapter → queue abstraction + ARQ worker skeleton → Supabase auth with BFF cookie sessions (needs Supabase keys) → Gmail OAuth + token store (needs Google OAuth client).
 
 ## Open questions for the owner (ask only when blocking)
-1. Always-on hosting budget (Render paid instance) — ADR-008.
-2. Which Gmail address sends NEXORA mails vs Job Hunter mails? Custom domain mailbox for NEXORA?
-3. Confirm NEXORA postal address in footer (Amritsar address from the public site) and whether "paying client" may be mentioned in outreach.
-4. Google Drive links per role resume (promised "later").
-5. Is the owner currently a student or graduated (resume says Apr 2026)? Affects job-mail wording.
+1. Which mode does `divyanshkhanna1729@gmail.com` send — NEXORA, Job Hunter, or both? (My schema ties one mailbox to one mode; tell me if you want one Gmail for both and I'll adjust.)
+2. Confirm NEXORA postal address in footer (Amritsar address from the public site) and whether "paying client" may be mentioned in outreach.
+3. Google Drive links per role resume (promised "later").
+4. Is the owner currently a student or graduated (resume says Apr 2026)? Affects job-mail wording.
 
 ## Credentials received
-See `.local/SECRETS.local.md` (never listed here). Pending: GitHub, Supabase, Render, Vercel (+bypass secret), Groq, Google OAuth, Redis.
+GitHub token ✅ (in `.local/`, never listed here). Pending: Supabase, Render, Vercel (+bypass secret), Groq, Google OAuth, Redis. Sender Gmail address received.

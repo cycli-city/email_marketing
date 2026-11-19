@@ -1,9 +1,10 @@
 import createClient, { type Middleware } from "openapi-fetch";
 
+import { API_URL } from "@/lib/env";
+
 import type { paths } from "./schema";
 
-/** Base URL of the FastAPI backend. Public by design — it contains no secret. */
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+export { API_URL };
 
 export type AccessTokenProvider = () => Promise<string | null> | string | null;
 

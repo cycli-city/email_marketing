@@ -1,4 +1,4 @@
-﻿import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 type Win = { __csp: string[]; __pwned?: boolean };
 
@@ -72,7 +72,7 @@ test.describe("HTTP security headers", () => {
   });
 });
 
-test.describe("CSP in the browser â€” the app itself", () => {
+test.describe("CSP in the browser — the app itself", () => {
   test("runs with zero CSP violations and hydrates (client JS executes under the policy)", async ({
     page,
   }) => {
@@ -96,7 +96,7 @@ test.describe("CSP in the browser â€” the app itself", () => {
   });
 });
 
-test.describe("CSP in the browser â€” attacks must fail", () => {
+test.describe("CSP in the browser — attacks must fail", () => {
   test("injected inline <script> in the server HTML (stored/reflected XSS) does not run", async ({
     page,
   }) => {

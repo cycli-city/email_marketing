@@ -17,7 +17,8 @@ SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "scan_secrets.py"
 
 def _load() -> ModuleType:
     spec = importlib.util.spec_from_file_location("scan_secrets", SCRIPT)
-    assert spec and spec.loader
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules["scan_secrets"] = module  # dataclasses resolves annotations through sys.modules
     spec.loader.exec_module(module)

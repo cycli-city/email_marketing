@@ -7,7 +7,6 @@ export interface BackendHealth {
   api: "up" | "unreachable";
   version: string | null;
   database: ComponentState;
-  redis: ComponentState;
   overall: "ready" | "degraded" | "unreachable";
   checkedAt: Date;
 }
@@ -34,7 +33,6 @@ export async function fetchBackendHealth(
       api: "up",
       version: live.data.version,
       database: body.checks.database ?? "unknown",
-      redis: body.checks.redis ?? "unknown",
       overall: body.status,
       checkedAt: now(),
     };
@@ -48,7 +46,6 @@ function unreachable(checkedAt: Date): BackendHealth {
     api: "unreachable",
     version: null,
     database: "unknown",
-    redis: "unknown",
     overall: "unreachable",
     checkedAt,
   };

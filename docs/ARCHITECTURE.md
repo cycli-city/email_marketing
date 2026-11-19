@@ -8,27 +8,29 @@ Status: v1 plan (2026-11-19). Implements `REQUIREMENTS.md` + `REQUIREMENTS_AUTON
                      ┌───────────────────────── Vercel ─────────────────────────┐
   Owner (browser) ──▶│ Next.js 16 dashboard (App Router, TS strict, shadcn/ui)  │
                      └───────────┬───────────────────────────────────────────────┘
-                                 │ HTTPS + Supabase JWT (Authorization: Bearer)
-                     ┌───────────▼─────────── Render ────────────────────────────┐
-   Gmail Pub/Sub ───▶│ FastAPI "api" role   /webhooks/gmail  /u/{token} (public)  │
+                                 │ HTTPS (BFF cookie session → API; ADR-014)
+                     ┌───────────▼─────────── Render (one always-on service) ────┐
+   Gmail Pub/Sub ───▶│ FastAPI API   /webhooks/gmail  /u/{token} (public)         │
    (push)            │                                                            │
-                     │ ARQ "worker" role  (same image, ROLE=worker|api|all)       │
-                     │   • controller tick (cron, 30s)   • stage workers          │
-                     │   • gmail sync cron               • reconcilers            │
-                     └───────┬──────────────────────────────┬─────────────────────┘
-                             │ SQLAlchemy 2 (asyncpg)       │ redis-py (queue, rate-limit, locks)
-                     ┌───────▼────────┐             ┌───────▼────────┐
-                     │ Supabase PG    │             │ Upstash/Render │
-                     │ (+Auth, RLS,   │             │ Redis          │
-                     │  FTS, pgvector?)│            └────────────────┘
-                     └────────────────┘
+                     │ In-process workers (asyncio; APP_ROLE=all)                 │
+                     │   • controller tick (30 s)   • stage workers               │
+                     │   • mailbox sync             • reconcilers · janitor       │
+                     └───────────────────────┬────────────────────────────────────┘
+                                             │ SQLAlchemy 2 (asyncpg, TLS)
+                                     ┌───────▼────────────────────────┐
+                                     │ Supabase PostgreSQL            │
+                                     │ source of truth + job_queue    │
+                                     │ (FOR UPDATE SKIP LOCKED), Auth,│
+                                     │ RLS, FTS                       │
+                                     └────────────────────────────────┘
      Providers (via ProviderManager): LLM · search · discovery · verification · email send/receive · notify
+     No Redis anywhere (ADR-024): queue = Postgres table, rate limiter = in-process.
 ```
 
 Single backend image, three roles selected by `APP_ROLE`: `api`, `worker`, `all` (api + worker in one process group — cheapest always-on deployment). The frontend is never required for the system to operate.
 
 ## 2. Design principles
-1. **Postgres is the source of truth for work; Redis is only transport.** Every unit of work is a row with a status. If Redis is wiped or the worker restarts, the controller re-derives what to do from the DB. (This is what makes "recover unfinished jobs without duplicating sent emails" true.)
+1. **Postgres is the source of truth for work — and the queue itself (ADR-024).** Every unit of work is a row with a status; the queue is a `job_queue` table claimed with `FOR UPDATE SKIP LOCKED`. If the worker restarts, expired locks are re-queued and the controller re-derives what to do from the DB. (This is what makes "recover unfinished jobs without duplicating sent emails" true.)
 2. **Persisted state machines**, not in-memory flows: `Campaign`, `DiscoveryJob`, `Lead/Contact`, `EmailMessage`, `FollowUpSchedule`.
 3. **Capability-based provider layer.** Business logic asks for a capability ("verify email"), never for "Hunter".
 4. **Deterministic code decides and acts; LLMs only propose** structured data (validated by Pydantic). An LLM can never trigger a send, a suppression change or a notification by itself.
@@ -45,7 +47,7 @@ DISCOVERED ─▶ RESEARCHED ─▶ CONTACTS_EXTRACTED ─▶ VERIFIED ─▶ QU
 Discovery and drafting **continue while sending is paused**; only `QUEUED → SENT` is gated by eligibility.
 
 ### 3.2 Campaign Controller (`orchestrator/controller.py`)
-An ARQ cron job (`controller_tick`, every 30 s, guarded by a Postgres advisory lock so only one tick runs at a time). For each `RUNNING` campaign it:
+An in-process periodic task (`controller_tick`, every 30 s, guarded by a Postgres advisory lock so only one tick runs at a time). For each `RUNNING` campaign it:
 1. Checks safety preconditions → auto-pauses with reason (sender auth failed, bounce rate over threshold, compliance block, kill switch).
 2. Computes **pipeline deficit**: `target_qualified − (qualified + drafted + queued + sent-in-flight)` → if > 0, creates/continues a `discovery_job` with a budget slice (replenishment).
 3. For each stage with pending rows and free capacity, enqueues stage jobs in batches using **deterministic job ids** (`stage:{lead_id}:{stage}:{attempt_epoch}`) — re-enqueue is a no-op.
@@ -56,7 +58,7 @@ Rows parked as `WAITING_PROVIDER` carry `retry_after`; the controller re-release
 
 ### 3.3 Crash recovery
 - Stage rows have `status`, `claimed_by`, `claimed_at`, `attempt`. A **janitor cron** returns rows stuck in `*_IN_PROGRESS` past a lease timeout to the previous state (except sends — see §5).
-- ARQ jobs use `max_tries`, `job_try`, graceful shutdown (`on_shutdown` finishes the current job, `allow_abort_jobs` for cancellation).
+- Queue rows carry `attempts`/`max_attempts`, `locked_until` leases and `run_at` for backoff; graceful shutdown finishes the current job and releases the rest; cancellation sets a flag the handler checks.
 - Dead-letter: after max attempts a task writes a `dead_letters` row (task, payload hash, error class, last error, attempts) and surfaces on the Ops page with a *retry* / *discard* action.
 
 ## 4. Provider layer (`app/providers`)
@@ -67,7 +69,7 @@ Rows parked as `WAITING_PROVIDER` carry `retry_after`; the controller re-release
 Each adapter declares a static `ProviderSpec`: `name`, `capability`, `requires_credentials`, `free_tier` (documented quota, reset rule, source URL, retrieved-at), `rate_limit`, `cost_per_call`, `terms_notes`, `supports_usage_api`, `default_priority`. Adapters normalise responses to internal Pydantic schemas (`CompanyRecord`, `ContactRecord`, `VerificationResult`, `LLMResult`, `SendResult`, …).
 
 ### 4.2 ProviderManager
-Persistent state per provider (`provider_states` table, hot counters mirrored in Redis): credentials status, connection status, plan, **known remaining credits (with `accuracy`: `provider_reported | internal_counter | unknown`)**, daily/monthly usage, rate-limit window, last success/failure, failure count, cooldown_until, reset_at, estimated cost, priority, enabled flag, `paid_fallback_allowed`. Never invent credits: if the provider exposes no usage endpoint the UI shows "internal counter (estimate)" or "unknown".
+Persistent state per provider (`provider_states` table; hot counters in process memory, flushed to the table): credentials status, connection status, plan, **known remaining credits (with `accuracy`: `provider_reported | internal_counter | unknown`)**, daily/monthly usage, rate-limit window, last success/failure, failure count, cooldown_until, reset_at, estimated cost, priority, enabled flag, `paid_fallback_allowed`. Never invent credits: if the provider exposes no usage endpoint the UI shows "internal counter (estimate)" or "unknown".
 
 **Selection** for a capability call:
 ```
@@ -134,7 +136,7 @@ Conventions: UUID PKs, `workspace_id` on every tenant table (+ composite indexes
 RLS: enabled deny-all on every table; the backend authorises in code (workspace-scoped repository layer + tests that a user from workspace B can never read workspace A).
 
 ## 10. Security
-Supabase Auth issues JWTs; backend verifies signature/`aud`/`exp` and maps `sub` → user/workspace. Fernet (AES-128-CBC+HMAC; key rotation via `MultiFernet`) for tokens/keys at rest; secrets never serialised to API responses (schemas exclude them, tests assert). Rate limiting (Redis sliding window) on API + webhook endpoints; CORS locked to `FRONTEND_URL`; security headers + CSP on the frontend; signed (HMAC/JWT) short-lived tokens for unsubscribe/OAuth state; Pub/Sub push verified by OIDC token; HTML emails sanitised (nh3/bleach) before render; audit log for every sensitive action; generic error bodies with request ids.
+Supabase Auth issues JWTs; backend verifies signature/`aud`/`exp` and maps `sub` → user/workspace. Fernet (AES-128-CBC+HMAC; key rotation via `MultiFernet`) for tokens/keys at rest; secrets never serialised to API responses (schemas exclude them, tests assert). Rate limiting (in-process sliding window, ADR-024) on API + webhook endpoints; CORS locked to `FRONTEND_URL`; security headers + CSP on the frontend; signed (HMAC/JWT) short-lived tokens for unsubscribe/OAuth state; Pub/Sub push verified by OIDC token; HTML emails sanitised (nh3/bleach) before render; audit log for every sensitive action; generic error bodies with request ids.
 
 ## 11. Repo layout
 ```
@@ -150,20 +152,20 @@ email_marketing/
 
 ## 12. Testing strategy
 - **Unit (fast, no I/O):** domain rules, state machines, scoring, compliance, retry/backoff math, provider selection (fake clock), MIME building, DSN parsing, extractors (hypothesis property tests), grounding verifier.
-- **Integration (real Postgres + Redis):** repositories, migrations up/down, ARQ tasks end-to-end with mock providers, controller tick, exactly-once send under injected crashes, reply pipeline with fixture mailboxes, tenant isolation. CI uses service containers; locally a pip-installed Postgres + fakeredis (see DECISIONS ADR-006).
+- **Integration (real Postgres):** repositories, migrations up/down, queue workers end-to-end with mock providers (incl. concurrent-claim and crash-recovery tests), controller tick, exactly-once send under injected crashes, reply pipeline with fixture mailboxes, tenant isolation. CI uses a Postgres service container; locally a pip-installed Postgres (see DECISIONS ADR-006).
 - **Adapter contract tests:** `respx`-mocked HTTP per provider with recorded sample payloads (from official docs); a shared contract suite every adapter of a capability must pass. Gmail via googleapiclient `HttpMock`.
 - **API tests:** httpx `ASGITransport`; auth, validation, authorisation, rate limits.
 - **Frontend:** Vitest + Testing Library (components/hooks), Playwright E2E against the real backend running mock providers; axe-core a11y checks.
 - **Gates in CI:** ruff, mypy --strict, pytest (+coverage floor), alembic upgrade/check, OpenAPI drift, ESLint, tsc, vitest, Playwright, build, gitleaks, pip-audit/npm audit, CodeQL.
 
 ## 13. Deployment topology
-Vercel (frontend) · Render (backend: one always-on service `APP_ROLE=all`, or split `api` + `worker`; **Render free web services sleep after inactivity, so true 24/7 autonomy needs a paid always-on instance — owner decision pending**, see DECISIONS ADR-008) · Supabase (Postgres/Auth) · Upstash or Render Key-Value (Redis). Config via env vars; migrations run as a pre-deploy command; health endpoints `/healthz` (liveness) and `/readyz` (DB+Redis).
+Vercel (frontend) · Render (backend: one always-on service `APP_ROLE=all`, or split `api` + `worker`; **free instance kept awake by UptimeRobot pinging `/readyz` — owner decision, ADR-008; SMTP ports are blocked there, so mail uses HTTPS APIs — ADR-026**) · Supabase (Postgres/Auth). Config via env vars; migrations run as a pre-deploy command; health endpoints `/healthz` (liveness) and `/readyz` (database).
 
 ## 14. Phase plan
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
 | 1 Architecture | scaffold, config, DB models + initial migration, CI, `.env.example` | CI green, migration applies on clean PG |
-| 2 Auth + integrations | Supabase JWT auth, Provider framework (registry/manager/retry/usage), Groq + mock LLM, Gmail OAuth, Redis/ARQ, provider research doc | adapters pass contract tests |
+| 2 Auth + integrations | Supabase JWT auth, Provider framework (registry/manager/retry/usage), Groq + mock LLM, Gmail OAuth, Postgres job queue + in-process workers, provider research doc | adapters pass contract tests |
 | 3 Discovery | discovery jobs, website crawler (robots), extractors, verification (syntax/MX/provider), AI qualification/scoring | e2e discovery with mocks; dedupe tests |
 | 4 Outreach | templates, generator + grounding verifier, campaigns, approval workflows, Gmail sender, limits/warm-up | exactly-once send tests |
 | 5 Reply intelligence | Gmail watch/history sync, bounce/OOO/unsub detection, LLM classifier, notifications, follow-ups | stop-rule tests |

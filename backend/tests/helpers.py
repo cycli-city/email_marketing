@@ -7,9 +7,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from cryptography.fernet import Fernet
-from fakeredis import FakeAsyncRedis
 from fastapi import FastAPI
-from redis.asyncio import Redis
 
 from app.core.config import Settings
 from app.main import create_app
@@ -23,7 +21,6 @@ PROD_OVERRIDES: dict[str, object] = {
     "frontend_url": "https://app.example.com",
     "backend_url": "https://api.example.com",
     "database_url": "postgresql://u:p@db.example.com:5432/postgres?sslmode=require",
-    "redis_url": "rediss://default:pw@redis.example.com:6379",
 }
 
 
@@ -44,13 +41,12 @@ def make_production_settings(**overrides: object) -> Settings:
 @asynccontextmanager
 async def running(
     settings: Settings | None = None,
-    redis: Redis | object | None = None,
     *,
     client_addr: tuple[str, int] = ("127.0.0.1", 123),
     base_url: str = "http://test",
     headers: dict[str, str] | None = None,
 ) -> AsyncIterator[tuple[FastAPI, httpx.AsyncClient]]:
-    app = create_app(settings or make_settings(), redis=redis or FakeAsyncRedis())  # type: ignore[arg-type]
+    app = create_app(settings or make_settings())
     async with app.router.lifespan_context(app):
         # raise_app_exceptions=False lets us observe the 500 response the server would really send.
         transport = httpx.ASGITransport(app=app, raise_app_exceptions=False, client=client_addr)

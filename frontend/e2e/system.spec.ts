@@ -7,7 +7,7 @@ test.describe("System status page (real backend)", () => {
     await expect(page).toHaveURL(/\/system$/);
     await expect(page.getByRole("heading", { name: "System status" })).toBeVisible();
     await expect(page.getByText("All systems operational")).toBeVisible();
-    await expect(page.getByText("Healthy")).toHaveCount(2); // database + redis
+    await expect(page.getByText("Healthy")).toHaveCount(1); // database
     await expect(page.getByText("Up", { exact: true })).toBeVisible(); // API
   });
 
@@ -40,7 +40,7 @@ test.describe("System status page (real backend)", () => {
       route.fulfill({
         status: 503,
         contentType: "application/json",
-        body: JSON.stringify({ status: "degraded", checks: { database: "error", redis: "ok" } }),
+        body: JSON.stringify({ status: "degraded", checks: { database: "error" } }),
       }),
     );
     await page.goto("/system");

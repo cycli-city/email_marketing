@@ -101,7 +101,7 @@
             "description": "Service Unavailable"
           }
         },
-        "summary": "Readiness probe (database + Redis)",
+        "summary": "Readiness probe (database). Also keeps a free Supabase project from auto-pausing.",
         "tags": [
           "health"
         ]

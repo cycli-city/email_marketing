@@ -1,5 +1,7 @@
 # AI Outreach Intelligence
 
+> **Personal project — all rights reserved.** No licence is granted: this is not open source, it is not a service, and it does not accept contributions or support requests.
+
 A personal, autonomous AI outreach platform: it discovers prospects, researches and qualifies them, writes
 genuinely personalised emails, sends them through Gmail within safe limits, watches the inbox 24/7, classifies
 replies, stops follow-ups when it should, and notifies only when a human is needed.
@@ -17,8 +19,8 @@ roles) — with separate campaigns, templates, sender identities and data.
 |---|---|
 | Frontend | Next.js (App Router), TypeScript, Tailwind, shadcn/ui, Recharts, Lucide |
 | Backend | Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2 (async), Alembic |
-| Data | Supabase PostgreSQL (+ Auth), Redis (Upstash/Render) |
-| Jobs | ARQ workers + cron (persistent, restart-safe) |
+| Data | Supabase PostgreSQL (+ Auth) — no Redis |
+| Jobs | Postgres-backed queue (`FOR UPDATE SKIP LOCKED`) + in-process workers/cron (persistent, restart-safe) |
 | AI | Groq (primary) behind a multi-provider failover layer |
 | Email | Gmail API (OAuth 2.0, Pub/Sub watch + History polling) |
 
@@ -59,7 +61,7 @@ Threat model, controls and honest limits: [`docs/SECURITY.md`](docs/SECURITY.md)
 ## Repository layout
 
 ```
-backend/    FastAPI app, ARQ workers, Alembic migrations, tests
+backend/    FastAPI app, in-process workers, Alembic migrations, tests
 frontend/   Next.js dashboard
 docs/       Architecture, decisions, provider research, deployment, runbooks
 .github/    CI (lint · types · tests · audit · secret scan)

@@ -3,9 +3,9 @@ import { defineConfig, devices } from "@playwright/test";
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 /**
- * E2E runs against a REAL backend (API + Postgres + Redis). Start it first:
+ * E2E runs against a REAL backend (API + Postgres). Start it first:
  *   CI:    see .github/workflows/ci.yml (service containers + uvicorn)
- *   local: backend/scripts/dev_redis.py + `python scripts/with_pg.py -- uvicorn app.main:app_factory --factory`
+ *   local: `python scripts/with_pg.py --name e2e --keep-data -- python -m uvicorn app.main:app_factory --factory --port 8000`
  * The Next.js server is started (or reused) by Playwright; run `npm run build` beforehand.
  */
 export default defineConfig({

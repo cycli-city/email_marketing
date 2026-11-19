@@ -8,7 +8,6 @@ import {
   RefreshCw,
   Server,
   XCircle,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { useMemo } from "react";
@@ -84,8 +83,8 @@ export function SystemStatus({ api }: { api?: ApiClient }) {
 
   if (isPending || !data) {
     return (
-      <div className="grid gap-4 sm:grid-cols-3" aria-busy="true" aria-label="Loading system status">
-        {[0, 1, 2].map((i) => (
+      <div className="grid gap-4 sm:grid-cols-2" aria-busy="true" aria-label="Loading system status">
+        {[0, 1].map((i) => (
           <Skeleton key={i} className="h-24 w-full" />
         ))}
       </div>
@@ -116,10 +115,14 @@ export function SystemStatus({ api }: { api?: ApiClient }) {
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <StatusCard icon={Server} title="API" description="FastAPI service" state={data.api} />
-        <StatusCard icon={Database} title="Database" description="PostgreSQL" state={data.database} />
-        <StatusCard icon={Zap} title="Redis" description="Job queue & rate limits" state={data.redis} />
+        <StatusCard
+          icon={Database}
+          title="Database"
+          description="PostgreSQL · job queue"
+          state={data.database}
+        />
       </div>
 
       {data.overall === "unreachable" && (

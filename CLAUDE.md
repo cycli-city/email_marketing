@@ -12,7 +12,8 @@
 | `docs/ARCHITECTURE.md` | Target architecture and the algorithms that matter (pipeline, failover, exactly-once send). |
 | `docs/DECISIONS.md` | ADR log. Any deviation from the spec goes here with the reason. |
 | `docs/PROVIDERS.md` | Researched provider matrix (free tiers, limits, ToS). Written in Phase 2 from *current* docs. |
-| `docs/profile/RESUME_PROFILE.md` | The only first-person facts Job Hunter emails may use. |
+| `.local/RESUME_PROFILE.local.md` | **Gitignored.** The only first-person facts Job Hunter emails may use. |
+| `.local/PRIVATE_CONTEXT.local.md` | **Gitignored.** The real values behind placeholders like `<NEXORA_FOUNDER_ADDRESS>` / `<JOB_HUNTER_MAILBOX>` / `<OWNER_PRIMARY_GMAIL>` used in tracked docs. |
 | `.local/SECRETS.local.md` | **Gitignored.** Real logins/keys. Read when needed; never copy into tracked files, logs, PRs or commit messages. |
 
 ## 1. The owner's standing instructions (non-negotiable)
@@ -38,6 +39,13 @@ Full model in `docs/SECURITY.md`; decisions ADR-014…020. Non-negotiable:
 - Add or change a security control ⇒ add a test that **proves it blocks the attack**, then update `docs/SECURITY.md`.
 - Pin third-party GitHub Actions to commit SHAs (resolve via the API; Dependabot updates them); keep build-only tooling in `devDependencies`.
 
+### 1c. Public-repository rules (ADR-027 — owner will develop publicly, then return to private)
+- Treat **every** tracked file, commit message, branch name, PR/issue text and CI log as world-readable forever. Personal data (mailboxes, phone, postal address, resume, client names) and credentials live only in `.local/`; tracked docs use placeholders (`<NEXORA_FOUNDER_ADDRESS>` …).
+- Run `python scripts/prepublic_audit.py --all` and `scan_secrets.py --tree --history` before any publication step; both must pass. CI runs the audit on every push.
+- Workflows: no repository secrets, no `pull_request_target`/`workflow_run`, least-privilege `permissions`, SHA-pinned actions. Deployment secrets belong in Render/Vercel only.
+- Do **not** flip the current repo public — its history fails the audit (ADR-027). Publication = new repo + single sanitised commit with a `noreply` author, only after the owner supplies the new repo and a new token.
+- Commit identity going forward: use the GitHub noreply address (`git config user.email <id>+<login>@users.noreply.github.com`).
+
 ## 2. Pre-flight for each work session
 1. Read `PROGRESS.md` (what's done / next) and skim `docs/DECISIONS.md`.
 2. `git status` / `git log -5`; make sure the working tree is understood.
@@ -46,12 +54,12 @@ Full model in `docs/SECURITY.md`; decisions ADR-014…020. Non-negotiable:
 ## 3. Engineering method
 - **Phases** follow `REQUIREMENTS.md` §18 (1 Architecture → 8 Deployment). Each phase ends with: tests green locally, CI green, `PROGRESS.md` updated, committed.
 - **Test-first for logic that matters** (compliance gate, state machines, retry/failover, exactly-once send, reply stop-rules). Pure domain code has no I/O so it is unit-testable with a fake clock.
-- **Layering (backend):** `api` (HTTP only) → `services` (use-cases) → `domain` (pure rules) ; `providers` (adapters behind capability protocols) ; `db` (models/repos) ; `workers` (ARQ tasks, thin wrappers over services). Imports only point downward. Prompts live in `app/prompts/`, never inline in services.
+- **Layering (backend):** `api` (HTTP only) → `services` (use-cases) → `domain` (pure rules) ; `providers` (adapters behind capability protocols) ; `db` (models/repos) ; `workers` (queue task handlers, thin wrappers over services). Imports only point downward. Prompts live in `app/prompts/`, never inline in services.
 - **Typing:** `mypy --strict` on backend, TypeScript `strict` on frontend. Lint: ruff (backend), ESLint (frontend).
 - **Contract-first:** FastAPI OpenAPI → generated TypeScript types committed; CI fails on drift.
 - **DB:** every schema change = Alembic migration (reviewed, reversible where sane); CI runs `alembic upgrade head` on a clean Postgres and `alembic check` for model/migration drift. All tables have RLS **enabled** (deny-all; backend uses service connection) so the Supabase anon key can never read data.
 - **Secrets:** config via `pydantic-settings`; `.env.example` lists every variable; CI has a secret scanner. Credentials at rest are Fernet-encrypted; never returned by any API.
-- **Idempotency everywhere:** deterministic ARQ job ids, unique constraints as the last line of defence, "claim row → act → record" pattern. See `docs/ARCHITECTURE.md` §5 for the exactly-once send protocol.
+- **Idempotency everywhere:** deterministic job dedupe keys (Postgres queue, ADR-024), unique constraints as the last line of defence, "claim row → act → record" pattern. See `docs/ARCHITECTURE.md` §5 for the exactly-once send protocol.
 - **Errors:** typed exceptions, structured logs (JSON), every failure is either retried (with policy), parked (waiting for provider/human) or dead-lettered — never silently dropped.
 - **Commits:** small, conventional (`feat:`, `fix:`, `test:`, `docs:`, `chore:`). Append the attribution trailer the harness specifies. Never commit anything matching `.env*`, `.local/`, keys, tokens.
 - **Git remote:** `origin = https://github.com/cycli-city/email_marketing.git` (private). Push only when tests pass. First push needs the owner's GitHub token (see CONTEXT.md §5).
@@ -62,7 +70,7 @@ Full model in `docs/SECURITY.md`; decisions ADR-014…020. Non-negotiable:
 Implemented end-to-end (API + worker + UI where relevant) · unit + integration tests · failure paths tested · audit-log entries · no new lint/type errors · migration included · docs/`PROGRESS.md` updated · works with mock providers and (if credentials exist) verified against the real provider.
 
 ## 5. Environment (see CONTEXT.md §4)
-Windows 11 · Node 24 · npm 11 · Python 3.11 · git. No Docker/gh/psql/Redis. Use `backend/.venv`. Shell commands: PowerShell is primary; Bash is Git Bash.
+Windows 11 · Node 24 · npm 11 · Python 3.11 · git. No Docker/gh/psql. **No Redis anywhere in the project** (ADR-024). Use `backend/.venv`. Shell commands: PowerShell is primary; Bash is Git Bash.
 
 ## 6. Commands (kept current — update when tooling changes)
 Run from `backend/` using the venv interpreter (`.\.venv\Scripts\python.exe`; `uv` lives at
@@ -85,12 +93,12 @@ Frontend (run from `frontend/`):
 |---|---|
 | Unit gate (what CI runs) | `npm run lint` · `npm run typecheck` · `npm run format:check` · `npm test` · `npm run build` |
 | Regenerate API types | `python scripts/export_openapi.py` (in `backend/`) then `npm run generate:api`; CI fails on drift (`--check`) |
-| **Full local E2E** (real stack, no Docker) | 3 background processes: `python scripts/dev_redis.py` · `python scripts/with_pg.py --name e2e -- alembic upgrade head` then `python scripts/with_pg.py --name e2e --keep-data -- python -m uvicorn app.main:app_factory --factory --port 8000` (all in `backend/`), then `npm run build && npx playwright test` |
+| **Full local E2E** (real stack, no Docker) | 2 steps in `backend/`: `python scripts/with_pg.py --name e2e -- alembic upgrade head`, then (background) `python scripts/with_pg.py --name e2e --keep-data -- python -m uvicorn app.main:app_factory --factory --port 8000`, then in `frontend/`: `npm run build && npx playwright test` |
 | Playwright browser | `npx playwright install chromium` (one-time) |
 
 Frontend gotchas: this shadcn uses **Base UI** (`render={<Link/>}` not `asChild`; active state is the bare `data-active` attribute); Next 16 has Cache Components
 on and `middleware` is now `proxy` — read `frontend/node_modules/next/dist/docs/` before using a Next API from memory; MSW v3 uses `onUnhandledFrame` (not
-`onUnhandledRequest`); `@types/node` must stay ≥ 22 for vitest 5; the dev Redis (`dev_redis.py`) is in-memory fakeredis, never for production.
+`onUnhandledRequest`); `@types/node` must stay ≥ 22 for vitest 5; Render free blocks outbound SMTP (25/465/587) so mail goes through the Gmail **REST** API only, and SMTP-probe email verification is impossible; Resend/Brevo/any ESP forbid cold outreach — never route prospecting mail through them (ADR-021).
 
 Gotchas learned: `Fact.statement` (not `text`) because a column named `text` shadows `sqlalchemy.text`; enum columns are VARCHAR+CHECK
 (`app/db/types.py::enum_col`) and `test_schema.py` verifies CHECKs match the Python enums; `FakeClock`/`Clock` for anything time-based;

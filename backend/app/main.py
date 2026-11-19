@@ -8,7 +8,6 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from redis.asyncio import Redis
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app import __version__
@@ -24,7 +23,7 @@ from app.core.hardening import (
 )
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
-from app.core.ratelimit import FallbackRateLimiter, InMemoryRateLimiter, Limit, RedisRateLimiter
+from app.core.ratelimit import InMemoryRateLimiter, Limit
 from app.db.session import create_engine, create_session_factory
 
 logger = structlog.get_logger("app")
@@ -32,8 +31,8 @@ logger = structlog.get_logger("app")
 HSTS_MAX_AGE_SECONDS = 63_072_000  # two years
 
 
-def create_app(settings: Settings | None = None, *, redis: Redis | None = None) -> FastAPI:
-    """Build the app. ``redis`` may be injected (tests); otherwise it is created from ``REDIS_URL``."""
+def create_app(settings: Settings | None = None) -> FastAPI:
+    """Build the app (single process: API + in-process workers — ADR-008/024)."""
     settings = settings or get_settings()
     configure_logging(settings.log_level, json_output=settings.app_env != "development")
     production = settings.app_env == "production"
@@ -43,16 +42,12 @@ def create_app(settings: Settings | None = None, *, redis: Redis | None = None) 
         engine = create_engine(settings)
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
-        owns_redis = redis is None
-        app.state.redis = redis if redis is not None else Redis.from_url(settings.redis_url)
         logger.info(
             "app.started", env=settings.app_env, role=settings.app_role, version=__version__
         )
         try:
             yield
         finally:
-            if owns_redis:
-                await app.state.redis.aclose()
             await engine.dispose()
             logger.info("app.stopped")
 
@@ -69,12 +64,7 @@ def create_app(settings: Settings | None = None, *, redis: Redis | None = None) 
     app.state.settings = settings
 
     trusted = settings.effective_trusted_proxies
-    limiter = FallbackRateLimiter(
-        RedisRateLimiter(
-            lambda: app.state.redis
-        ),  # resolved lazily: Redis is created in the lifespan
-        InMemoryRateLimiter(),
-    )
+    limiter = InMemoryRateLimiter()  # exact for a single process; no shared store needed (ADR-024)
     sensitive = Limit("sensitive", settings.rate_limit_sensitive_per_minute)
     rules = [
         Rule("/api/v1/auth", sensitive),

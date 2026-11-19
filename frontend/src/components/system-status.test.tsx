@@ -27,34 +27,30 @@ describe("<SystemStatus />", () => {
   it("shows a loading state, then healthy components", async () => {
     server.use(
       live,
-      http.get(`${BASE}/readyz`, () =>
-        HttpResponse.json({ status: "ready", checks: { database: "ok", redis: "ok" } }),
-      ),
+      http.get(`${BASE}/readyz`, () => HttpResponse.json({ status: "ready", checks: { database: "ok" } })),
     );
     renderStatus();
 
     expect(screen.getByLabelText(/loading system status/i)).toBeInTheDocument();
     expect(await screen.findByText("All systems operational")).toBeInTheDocument();
     expect(screen.getByText(/API v0\.1\.0/)).toBeInTheDocument();
-    expect(screen.getAllByText("Healthy")).toHaveLength(2); // database + redis
+    expect(screen.getAllByText("Healthy")).toHaveLength(1); // database
     expect(screen.getByText("Up")).toBeInTheDocument(); // API
+    expect(screen.queryByText("Redis")).not.toBeInTheDocument(); // ADR-024
   });
 
   it("flags the failing dependency when the backend is degraded", async () => {
     server.use(
       live,
       http.get(`${BASE}/readyz`, () =>
-        HttpResponse.json(
-          { status: "degraded", checks: { database: "error", redis: "ok" } },
-          { status: 503 },
-        ),
+        HttpResponse.json({ status: "degraded", checks: { database: "error" } }, { status: 503 }),
       ),
     );
     renderStatus();
 
     expect(await screen.findByText(/degraded — a dependency is failing/i)).toBeInTheDocument();
     expect(screen.getAllByText("Failing")).toHaveLength(1);
-    expect(screen.getAllByText("Healthy")).toHaveLength(1);
+    expect(screen.queryByText("Healthy")).not.toBeInTheDocument();
   });
 
   it("explains what to check when the backend is unreachable", async () => {
@@ -72,9 +68,7 @@ describe("<SystemStatus />", () => {
         calls += 1;
         return HttpResponse.json({ status: "ok", version: "0.1.0" });
       }),
-      http.get(`${BASE}/readyz`, () =>
-        HttpResponse.json({ status: "ready", checks: { database: "ok", redis: "ok" } }),
-      ),
+      http.get(`${BASE}/readyz`, () => HttpResponse.json({ status: "ready", checks: { database: "ok" } })),
     );
     renderStatus();
     await screen.findByText("All systems operational");

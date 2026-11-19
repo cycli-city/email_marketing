@@ -1,16 +1,7 @@
 from __future__ import annotations
 
-import pytest
-from fakeredis import FakeAsyncRedis
-
 from app.core.clock import FakeClock
-from app.core.ratelimit import (
-    Decision,
-    FallbackRateLimiter,
-    InMemoryRateLimiter,
-    Limit,
-    RedisRateLimiter,
-)
+from app.core.ratelimit import InMemoryRateLimiter, Limit
 
 LIMIT = Limit("api", 3, 60)
 
@@ -66,64 +57,8 @@ class TestInMemoryRateLimiter:
         clock.advance(seconds=61)
         assert (await limiter.hit("ip", LIMIT)).allowed
 
-
-class TestRedisRateLimiter:
-    @pytest.fixture
-    def parts(self) -> tuple[RedisRateLimiter, FakeClock]:
-        clock = FakeClock()  # starts on a window boundary (09:00:00)
-        redis = FakeAsyncRedis()
-        return RedisRateLimiter(lambda: redis, clock), clock
-
-    async def test_blocks_after_the_limit(self, parts: tuple[RedisRateLimiter, FakeClock]) -> None:
-        limiter, _ = parts
-        results = [await limiter.hit("ip", Limit("api", 5, 60)) for _ in range(6)]
-        assert [r.allowed for r in results] == [True] * 5 + [False]
-        assert results[-1].retry_after == 60
-
-    async def test_sliding_weight_prevents_a_burst_at_the_window_boundary(
-        self, parts: tuple[RedisRateLimiter, FakeClock]
-    ) -> None:
-        limiter, clock = parts
-        limit = Limit("api", 5, 60)
-        for _ in range(5):
-            await limiter.hit("ip", limit)
-        clock.advance(seconds=60)  # new window starts; previous window's 5 still count fully
-        assert not (await limiter.hit("ip", limit)).allowed
-        clock.advance(seconds=30)  # half-way: the previous window now weighs 50 %
-        assert (await limiter.hit("ip", limit)).allowed
-        clock.advance(seconds=120)  # everything has aged out
-        assert (await limiter.hit("ip", limit)).allowed
-
-    async def test_keys_are_isolated(self, parts: tuple[RedisRateLimiter, FakeClock]) -> None:
-        limiter, _ = parts
-        limit = Limit("api", 1, 60)
-        assert (await limiter.hit("a", limit)).allowed
-        assert not (await limiter.hit("a", limit)).allowed
-        assert (await limiter.hit("b", limit)).allowed
-
-    async def test_uses_three_commands_per_request_and_sets_expiry(self) -> None:
-        redis = FakeAsyncRedis()
-        limiter = RedisRateLimiter(lambda: redis, FakeClock())
-        await limiter.hit("ip", Limit("api", 5, 60))
-        (key,) = [k async for k in redis.scan_iter("aoi:rl:*")]
-        assert 0 < await redis.ttl(key) <= 120  # counters never live forever
-
-
-class _Broken:
-    async def hit(self, key: str, limit: Limit) -> Decision:
-        raise ConnectionError("redis down")
-
-
-class TestFallbackRateLimiter:
-    async def test_falls_back_to_memory_when_redis_fails_and_still_enforces_the_limit(self) -> None:
-        limiter = FallbackRateLimiter(_Broken(), InMemoryRateLimiter(FakeClock()))
-        decisions = [await limiter.hit("ip", LIMIT) for _ in range(4)]
-        assert [d.allowed for d in decisions] == [True, True, True, False]
-
-    async def test_primary_is_used_when_healthy(self) -> None:
-        redis = FakeAsyncRedis()
-        limiter = FallbackRateLimiter(
-            RedisRateLimiter(lambda: redis, FakeClock()), InMemoryRateLimiter(FakeClock())
-        )
-        await limiter.hit("ip", LIMIT)
-        assert [k async for k in redis.scan_iter("aoi:rl:*")]
+    async def test_a_flood_of_unique_keys_cannot_grow_memory_without_bound(self) -> None:
+        limiter = InMemoryRateLimiter(FakeClock(), max_keys=100)
+        for i in range(5_000):
+            await limiter.hit(f"attacker-{i}", Limit("api", 5, 60))
+        assert len(limiter._hits) <= 100

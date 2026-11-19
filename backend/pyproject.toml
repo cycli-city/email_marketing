@@ -17,9 +17,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30",
     "alembic>=1.14",
-    # queue / cache
-    "arq>=0.26",
-    "redis>=5.2,<6",  # arq 0.26 requires redis<6; an unbounded range lets automated bumps break the queue
+    # (no Redis / ARQ: the job queue is a Postgres table — ADR-024)
     # http + security
     "httpx>=0.28",
     "cryptography>=43",
@@ -44,7 +42,6 @@ dev = [
     "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
     "respx>=0.21",
-    "fakeredis>=2.26",
     "hypothesis>=6.120",
     "ruff>=0.8",
     "mypy>=1.13",
@@ -93,7 +90,7 @@ files = ["app", "tests"]
 exclude = ["migrations/"]
 
 [[tool.mypy.overrides]]
-module = ["arq.*", "tldextract.*", "protego.*", "nh3.*", "fakeredis.*", "asyncpg.*"]
+module = ["tldextract.*", "protego.*", "nh3.*", "asyncpg.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

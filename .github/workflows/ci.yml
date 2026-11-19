@@ -36,16 +36,9 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
-      redis:
-        image: redis:7
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       # Integration tests create their own throw-away databases on this server.
       DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/postgres
-      REDIS_URL_TEST: redis://localhost:6379/1
       REQUIRE_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -142,15 +135,8 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
-      redis:
-        image: redis:7
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aoi
-      REDIS_URL: redis://localhost:6379/0
       APP_ENV: test
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -207,6 +193,8 @@ jobs:
           persist-credentials: false
       - name: Repository scanner (tree + history + forbidden files)
         run: python3 scripts/scan_secrets.py --tree --history
+      - name: Public-readiness audit (personal data, workflow safety)
+        run: python3 scripts/prepublic_audit.py --tree --workflows
       - name: Install gitleaks (pinned version, checksum-verified)
         run: |
           set -euo pipefail

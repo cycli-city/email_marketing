@@ -165,27 +165,15 @@ async def test_docs_available_in_development() -> None:
         assert (await client.get("/openapi.json")).status_code == 200
 
 
-class _BrokenRedis:
-    async def ping(self) -> bool:
-        raise ConnectionError("redis down")
-
-    async def aclose(self) -> None:
-        return None
-
-
 class TestReadiness:
     async def test_degraded_when_database_is_unreachable(self) -> None:
         async with running() as (_, client):
             response = await client.get("/readyz")
         assert response.status_code == 503
-        assert response.json() == {
-            "status": "degraded",
-            "checks": {"database": "error", "redis": "ok"},
-        }
+        assert response.json() == {"status": "degraded", "checks": {"database": "error"}}
 
-    async def test_degraded_when_redis_is_down_and_error_details_are_not_leaked(self) -> None:
-        async with running(redis=_BrokenRedis()) as (_, client):
+    async def test_database_error_details_are_not_leaked(self) -> None:
+        async with running() as (_, client):
             response = await client.get("/readyz")
-        assert response.status_code == 503
-        assert response.json()["checks"]["redis"] == "error"
-        assert "ConnectionError" not in response.text
+        for needle in ("ConnectionRefused", "OSError", "asyncpg", "127.0.0.1", "nobody"):
+            assert needle not in response.text

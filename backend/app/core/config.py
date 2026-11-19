@@ -58,7 +58,6 @@ class Settings(BaseSettings):
     database_url_test: str | None = None
     db_pool_size: int = 10
     db_max_overflow: int = 10
-    redis_url: str = "redis://localhost:6379/0"
 
     # ── supabase / auth ──────────────────────────────────────
     supabase_url: str | None = None
@@ -99,8 +98,6 @@ class Settings(BaseSettings):
     # Postgres: production requires TLS (`?sslmode=require` in DATABASE_URL). For certificate
     # verification (protects against MITM) point this at the provider's CA bundle (Supabase publishes one).
     database_ssl_ca_file: str | None = None
-    # Redis: production requires `rediss://`. Set only for a private-network Redis you fully control.
-    redis_allow_plaintext: bool = False
 
     # ── abuse / DoS controls (see docs/SECURITY.md) ──────────
     # Number of reverse proxies in front of the app (Render = 1). Decides which X-Forwarded-* entries
@@ -163,7 +160,7 @@ class Settings(BaseSettings):
         return problems
 
     def _transport_problems(self) -> list[str]:
-        """HTTPS / TLS everywhere: public URLs, identity endpoints, Postgres and Redis."""
+        """HTTPS / TLS everywhere: public URLs, identity endpoints and Postgres."""
         problems: list[str] = []
         # Unsubscribe links and OAuth redirects are built from these — a localhost/http value would
         # ship broken opt-outs in real emails (compliance bug), so refuse to start.
@@ -178,8 +175,6 @@ class Settings(BaseSettings):
             problems.append(
                 "DATABASE_URL must enforce TLS (append ?sslmode=require, or set DATABASE_SSL_CA_FILE)"
             )
-        if not self.redis_url.startswith("rediss://") and not self.redis_allow_plaintext:
-            problems.append("REDIS_URL must use rediss:// (TLS), or set REDIS_ALLOW_PLAINTEXT=true")
         return problems
 
     # ── derived helpers ──────────────────────────────────────

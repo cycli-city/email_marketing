@@ -121,14 +121,9 @@ class TestProductionGuards:
         )
         assert s.database_requires_tls
 
-    def test_production_requires_tls_to_redis_unless_explicitly_allowed(self) -> None:
-        with pytest.raises(ValidationError) as exc:
-            make(**{**self.PROD, "redis_url": "redis://red-abc:6379"})
-        assert "rediss://" in str(exc.value)
-        allowed = make(
-            **{**self.PROD, "redis_url": "redis://red-abc:6379", "redis_allow_plaintext": True}
-        )
-        assert allowed.redis_allow_plaintext
+    def test_no_redis_setting_exists_any_more(self) -> None:
+        """ADR-024: the platform runs without Redis; a stale REDIS_URL in the environment is simply ignored."""
+        assert not hasattr(make(), "redis_url")
 
     @pytest.mark.parametrize(
         ("field", "value", "needle"),
@@ -152,7 +147,6 @@ class TestProductionGuards:
         s = make(
             app_env="development",
             database_url="postgresql://u:p@localhost/db",
-            redis_url="redis://localhost",
         )
         assert s.app_env == "development"
 

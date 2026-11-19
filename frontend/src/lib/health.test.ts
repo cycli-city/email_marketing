@@ -16,15 +16,12 @@ describe("fetchBackendHealth", () => {
   it("reports ready when every dependency is healthy", async () => {
     server.use(
       live,
-      http.get(`${BASE}/readyz`, () =>
-        HttpResponse.json({ status: "ready", checks: { database: "ok", redis: "ok" } }),
-      ),
+      http.get(`${BASE}/readyz`, () => HttpResponse.json({ status: "ready", checks: { database: "ok" } })),
     );
     expect(await fetchBackendHealth(api(), fixedNow)).toEqual({
       api: "up",
       version: "0.1.0",
       database: "ok",
-      redis: "ok",
       overall: "ready",
       checkedAt: fixedNow(),
     });
@@ -34,16 +31,12 @@ describe("fetchBackendHealth", () => {
     server.use(
       live,
       http.get(`${BASE}/readyz`, () =>
-        HttpResponse.json(
-          { status: "degraded", checks: { database: "error", redis: "ok" } },
-          { status: 503 },
-        ),
+        HttpResponse.json({ status: "degraded", checks: { database: "error" } }, { status: 503 }),
       ),
     );
     const health = await fetchBackendHealth(api(), fixedNow);
     expect(health.overall).toBe("degraded");
     expect(health.database).toBe("error");
-    expect(health.redis).toBe("ok");
     expect(health.api).toBe("up");
   });
 

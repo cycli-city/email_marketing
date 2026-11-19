@@ -77,20 +77,9 @@ class TestRateLimiting:
             codes = [(await client.get("/api/v1/auth/login")).status_code for _ in range(3)]
         assert codes == [404, 404, 429]
 
-    async def test_a_redis_outage_does_not_switch_protection_off(self) -> None:
-        class DeadRedis:
-            def pipeline(self, *a: object, **k: object) -> None:
-                raise ConnectionError("down")
-
-            async def ping(self) -> bool:
-                raise ConnectionError("down")
-
-            async def aclose(self) -> None: ...
-
-        async with running(make_settings(rate_limit_per_minute=2), redis=DeadRedis()) as (
-            _,
-            client,
-        ):
+    async def test_limits_hold_with_the_database_down(self) -> None:
+        """The limiter is in-process, so protection never depends on another service being up."""
+        async with running(make_settings(rate_limit_per_minute=2)) as (_, client):  # DB unreachable
             codes = [(await client.get("/nope")).status_code for _ in range(3)]
         assert codes == [404, 404, 429]
 

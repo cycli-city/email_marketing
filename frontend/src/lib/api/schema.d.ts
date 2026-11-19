@@ -28,7 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Readiness probe (database + Redis) */
+        /** Readiness probe (database). Also keeps a free Supabase project from auto-pausing. */
         get: operations["readyz_readyz_get"];
         put?: never;
         post?: never;

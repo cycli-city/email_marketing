@@ -26,7 +26,7 @@ Facts below were read from the public site `https://www.nexora-ai.co.in` on 2026
 - **Industries it names:** gyms/fitness, dental clinics, salons/spas, restaurants/cafes, real estate, medical clinics, hotels/hospitality, travel/tourism, education/coaching, automobile service.
 - **Pricing (INR/month):** Free (1 WhatsApp no., 100 AI replies, 50 contacts — mentioned in FAQ) · Starter ₹4,999 · Growth ₹9,999 (most popular; 3 WA numbers, 5k replies, Instagram + Messenger, broadcasts, automations) · Pro ₹19,999 (10 numbers, unlimited replies/contacts, dedicated manager) · Enterprise custom. Annual = "2 months free" (amounts not shown). Free trial, no card required, length not stated. **Prices are INR — never convert/assume USD figures.**
 - **Claims the site makes:** replies "within seconds", "setup in minutes", "24/7". The site is candid that it is **a new product with no customer counts, testimonials or case studies** → outreach must NOT imply traction, results, customers or ROI numbers. Prefer: free trial, founder-led setup call, concrete use-case ("answer WhatsApp enquiries after hours and book appointments").
-- **Contact / footer data:** support@nexora-ai.co.in · Lane No. 17, Vrindavan Gardens, Amritsar, Punjab, India (usable as the physical postal address in CAN-SPAM footers — confirm with owner before use) · © NEXORA AI 2026.
+- **Contact / footer data:** support@nexora-ai.co.in · <NEXORA_POSTAL_ADDRESS> (usable as the physical postal address in CAN-SPAM footers — confirm with owner before use) · © NEXORA AI 2026.
 - **Not stated anywhere** (never invent): founder/team bios, funding, company size, demo-booking link, trial length, annual prices, integrations beyond WA/IG/Messenger.
 - **Owner's technical proof points** (from resume; usable for credibility in NEXORA mails if accurate): live multi-tenant SaaS, Meta App Review approved (14 permissions), first paying client. Treat "paying client" as a fact the owner can confirm before it appears in any email.
 - A login for the NEXORA dashboard exists (see `.local/SECRETS.local.md`). Not needed for the build; only use if product detail is missing.
@@ -35,19 +35,20 @@ Facts below were read from the public site `https://www.nexora-ai.co.in` on 2026
 - Target roles: **Software Engineer, AI Engineer, Python Developer, Full-Stack, Backend, Frontend** (+ Automation Engineer, others configurable).
 - Opportunity types (owner, 2026-11-19): **jobs, part-time and freelance** — the same Job Hunter mode and mailbox serves all three.
 - The owner keeps **a separate resume per role**, each hosted on **Google Drive** — links will be provided later. Design decision: a `resume_assets` table (`role_key`, `label`, `drive_url`, `file_id`, `is_default`); outreach picks the right variant per target role and includes the **link in the email body** (optionally attaches the file via Drive download if the owner wants). Until links arrive, the system must refuse to send job mails that need a CV and say why (no fake links).
-- A **general resume** was uploaded: facts distilled into `docs/profile/RESUME_PROFILE.md`. It is the ONLY source of "personal experience" the email generator may cite.
+- A **general resume** was uploaded: facts distilled into `.local/RESUME_PROFILE.local.md` (private — deliberately kept out of the repo). It is the ONLY source of "personal experience" the email generator may cite.
 - Separate sender identity, templates, categories and campaign data from NEXORA (hard requirement).
 
 ## 3. Sender identities (owner-confirmed 2026-11-19 — see ADR-021)
-- **NEXORA mode** → From **`founder@nexora-ai.co.in`**. That address has email routing to **`divyanshkhanna256@gmail.com`** (so prospects' replies land in the 256 mailbox). The NEXORA connected account is the 256 mailbox + a verified Gmail "Send mail as" alias for the founder address. **Replies, follow-ups and owner-approved responses for NEXORA all go out as `founder@nexora-ai.co.in`**, in the same thread, and open with context: *"Hi <name>, Divyansh here, founder of NEXORA — you showed interest in …"* (anchored on the prospect's own words).
-- **Job Hunter mode** → **`divyanshkhanna1729@gmail.com`**, for **jobs plus part-time and freelance opportunities** (targeting gets an `opportunity_type`: full-time | part-time | freelance | contract; freelance has its own template).
+_Tracked docs use placeholders (`<NEXORA_FOUNDER_ADDRESS>`, `<JOB_HUNTER_MAILBOX>`, `<OWNER_PRIMARY_GMAIL>`, `<NEXORA_POSTAL_ADDRESS>`); the real values are in `.local/PRIVATE_CONTEXT.local.md` (ADR-027: the repo may be public, so no personal data is tracked)._
+- **NEXORA mode** → From **`<NEXORA_FOUNDER_ADDRESS>`**. That address has email routing to **`<OWNER_PRIMARY_GMAIL>`** (so prospects' replies land in the 256 mailbox). The NEXORA connected account is the 256 mailbox + a verified Gmail "Send mail as" alias for the founder address. **Replies, follow-ups and owner-approved responses for NEXORA all go out as `<NEXORA_FOUNDER_ADDRESS>`**, in the same thread, and open with context: *"Hi <name>, Divyansh here, founder of NEXORA — you showed interest in …"* (anchored on the prospect's own words).
+- **Job Hunter mode** → **`<JOB_HUNTER_MAILBOX>`**, for **jobs plus part-time and freelance opportunities** (targeting gets an `opportunity_type`: full-time | part-time | freelance | contract; freelance has its own template).
 - Never rotate or fail over between mailboxes to dodge limits. Both mailboxes also contain personal mail → the system touches only threads it started (inbox scope guard, ADR-021).
 - Deliverability of alias sending (SPF/DKIM/DMARC alignment for `nexora-ai.co.in`) is **tested before any real campaign**; fallback is Resend with a domain-authenticated sender (ADR-021 §e). Needs DNS access to the domain when we get there.
 - **Free-credit strategy (owner, 2026-11-19):** use every legitimate free tier across many *different* providers; never multiple accounts/keys at one provider (ADR-022, `docs/PROVIDERS.md`).
 
 ## 4. Dev machine facts (Windows 11, inspected 2026-11-19)
 - Present: Node v24.15, npm 11.12, Python 3.11.9 (Microsoft Store build), git 2.54, winget 1.30. 16 GB RAM, ~52 GB free.
-- **Absent:** Docker, `gh`, `psql`, Redis, `uv`, `pnpm`, Supabase/Vercel CLIs.
+- **Absent:** Docker, `gh`, `psql`, `uv`, `pnpm`, Supabase/Vercel CLIs. (Redis is intentionally *not used at all* — owner decision 2026-11-19, ADR-024.)
 - Consequences: GitHub/Render/Vercel/Supabase are driven through their **REST APIs / `npx` CLIs** with the owner-supplied tokens; integration tests that need Postgres/Redis run in **GitHub Actions service containers** and locally via a pip-installable Postgres (see `docs/DECISIONS.md`) + `fakeredis`.
 - git identity configured globally (name + email).
 
@@ -60,7 +61,7 @@ Facts below were read from the public site `https://www.nexora-ai.co.in` on 2026
 | Frontend hosting | Vercel token + deployment-protection bypass secret | pending |
 | LLM | Groq API key (primary) — Gemini/Cerebras/OpenRouter optional | pending |
 | Gmail | Google Cloud OAuth client ID/secret (+ Pub/Sub topic) | pending — I'll write the exact console steps when needed |
-| Redis | Upstash/Render Redis URL | pending |
+| ~~Redis~~ | not needed (ADR-024) | — |
 | Optional discovery | Hunter, Brave/Tavily/Exa, Firecrawl, Snov, PDL… | optional; only if owner wants them |
 | Notifications | Telegram bot token + chat id | optional |
 

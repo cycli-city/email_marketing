@@ -16,7 +16,7 @@ function renderStatus(children?: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
     <QueryClientProvider client={client}>
-      {children ?? <SystemStatus api={createApiClient(undefined, BASE)} />}
+      {children ?? <SystemStatus api={createApiClient({ baseUrl: BASE })} />}
     </QueryClientProvider>,
   );
 }
@@ -58,7 +58,7 @@ describe("<SystemStatus />", () => {
     renderStatus();
 
     expect(await screen.findByText("Backend unreachable")).toBeInTheDocument();
-    expect(screen.getByText(/NEXT_PUBLIC_API_URL/)).toBeInTheDocument();
+    expect(screen.getByText(/BACKEND_URL/)).toBeInTheDocument();
   });
 
   it("Refresh button re-queries the backend", async () => {

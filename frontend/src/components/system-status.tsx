@@ -129,7 +129,7 @@ export function SystemStatus({ api }: { api?: ApiClient }) {
         <Card>
           <CardContent className="text-muted-foreground pt-6 text-sm">
             The dashboard could not reach the backend. Check that the API is running and that{" "}
-            <code className="bg-muted rounded px-1 py-0.5">NEXT_PUBLIC_API_URL</code> points at it.
+            <code className="bg-muted rounded px-1 py-0.5">BACKEND_URL</code> points at it.
           </CardContent>
         </Card>
       )}

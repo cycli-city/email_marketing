@@ -32,7 +32,7 @@ test.describe("System status page (real backend)", () => {
     await page.route("**/healthz", (route) => route.abort("connectionrefused"));
     await page.goto("/system");
     await expect(page.getByText("Backend unreachable")).toBeVisible();
-    await expect(page.getByText("NEXT_PUBLIC_API_URL")).toBeVisible();
+    await expect(page.getByText("BACKEND_URL")).toBeVisible();
   });
 
   test("shows which dependency is failing when the backend is degraded", async ({ page }) => {

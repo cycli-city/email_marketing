@@ -159,6 +159,10 @@ jobs:
           uv run alembic upgrade head
       - name: Start API
         working-directory: backend
+        env:
+          # Stands in for Supabase Auth: frontend/e2e/support/fake-idp.mjs (started by Playwright) signs genuine ES256 tokens.
+          SUPABASE_URL: http://127.0.0.1:54321
+          OWNER_EMAILS: owner@example.com,shortlived@example.com
         run: |
           nohup uv run uvicorn app.main:app_factory --factory --port 8000 --no-server-header > /tmp/api.log 2>&1 &
           curl --retry 40 --retry-connrefused --retry-delay 1 -sf http://localhost:8000/readyz

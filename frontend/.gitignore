@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# e2e: saved browser sessions (from the fake identity provider; still never commit cookies)
+/e2e/.auth/

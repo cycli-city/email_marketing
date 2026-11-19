@@ -1,29 +1,42 @@
-import createClient, { type Middleware } from "openapi-fetch";
+import createClient from "openapi-fetch";
 
-import { API_URL } from "@/lib/env";
+import { BFF_BASE, LOGIN_PATH } from "@/lib/auth/constants";
 
 import type { paths } from "./schema";
 
-export { API_URL };
+export interface ApiClientOptions {
+  /** Defaults to the same-origin API proxy. Tests pass an absolute URL. */
+  baseUrl?: string;
+  /** Called when the server says the session is gone. Defaults to sending the browser to the login page. */
+  onUnauthorized?: () => void;
+}
 
-export type AccessTokenProvider = () => Promise<string | null> | string | null;
+function redirectToLogin(): void {
+  if (typeof window === "undefined") return;
+  const here = `${window.location.pathname}${window.location.search}`;
+  // A full page load on purpose (not router.push): it discards every piece of client state belonging to the dead session.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign(`${LOGIN_PATH}?next=${encodeURIComponent(here)}`);
+}
 
 /**
  * Typed API client generated from the backend's OpenAPI schema (contract-first).
- * When a token provider is given, every request carries `Authorization: Bearer <token>`.
+ *
+ * It talks to this app's own origin (`/bff/...`) — never to the backend directly — and carries NO credentials of its
+ * own: the access token lives in an HttpOnly cookie that JavaScript cannot read, and the server-side proxy attaches it
+ * (ADR-014). So there is nothing here for an injected script to steal, and no token provider to configure.
  */
-export function createApiClient(getAccessToken?: AccessTokenProvider, baseUrl: string = API_URL) {
+export function createApiClient({
+  baseUrl = BFF_BASE,
+  onUnauthorized = redirectToLogin,
+}: ApiClientOptions = {}) {
   const client = createClient<paths>({ baseUrl });
-  if (getAccessToken) {
-    const auth: Middleware = {
-      async onRequest({ request }) {
-        const token = await getAccessToken();
-        if (token) request.headers.set("Authorization", `Bearer ${token}`);
-        return request;
-      },
-    };
-    client.use(auth);
-  }
+  client.use({
+    onResponse({ response }) {
+      if (response.status === 401) onUnauthorized();
+      return undefined;
+    },
+  });
   return client;
 }
 

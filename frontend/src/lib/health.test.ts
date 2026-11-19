@@ -7,7 +7,7 @@ import { createApiClient } from "./api/client";
 import { fetchBackendHealth } from "./health";
 
 const BASE = "http://api.test";
-const api = () => createApiClient(undefined, BASE);
+const api = () => createApiClient({ baseUrl: BASE });
 const fixedNow = () => new Date("2026-01-01T00:00:00Z");
 
 const live = http.get(`${BASE}/healthz`, () => HttpResponse.json({ status: "ok", version: "0.1.0" }));

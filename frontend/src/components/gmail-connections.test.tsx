@@ -220,7 +220,7 @@ describe("<GmailConnections />", () => {
     );
     renderScreen();
     expect(await screen.findByText("Gmail is not configured on the server")).toBeInTheDocument();
-    expect(screen.getByText(/GOOGLE_CLIENT_ID/)).toBeInTheDocument();
+    expect(screen.getByText(/no Google sign-in credentials or encryption key yet/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /connect a gmail mailbox/i })).not.toBeInTheDocument();
   });
 

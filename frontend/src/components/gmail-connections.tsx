@@ -165,8 +165,9 @@ export function GmailConnections({
               Gmail is not configured on the server
             </CardTitle>
             <CardDescription>
-              The backend needs GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI and ENCRYPTION_KEY
-              before a mailbox can be connected.
+              The backend has no Google sign-in credentials or encryption key yet. Add them to the
+              server&apos;s environment (see .env.example in the repository), restart it, then reload this
+              page.
             </CardDescription>
           </CardHeader>
         </Card>

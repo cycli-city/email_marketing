@@ -29,7 +29,11 @@ fi
   npm run --silent lint &&
   npm run --silent typecheck &&
   npm run --silent format:check &&
-  npm test --silent
+  npm test --silent &&
+  npm run --silent build
 ) || { echo "pre-push: frontend gate failed." >&2; exit 1; }
+
+# What CI checks after the build: no secret and no server-only variable NAME may reach the browser bundle.
+"$PY" scripts/scan_secrets.py --path frontend/.next/static --forbid-names --allow-anon-jwt   || { echo "pre-push: blocked — the browser bundle contains a secret or a server-only name." >&2; exit 1; }
 
 echo "pre-push: all gates passed."

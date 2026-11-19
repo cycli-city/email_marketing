@@ -56,6 +56,7 @@ from app.domain.enums import (
     MessageStatus,
 )
 from app.integrations.gmail.api import GmailApi
+from app.integrations.gmail.credentials import MailboxCredentials
 from app.integrations.gmail.errors import AccountNeedsReauthError, GoogleUnavailableError
 from app.integrations.gmail.mime import Mailbox, MessageBuildError, OutboundEmail, build_message
 from app.providers.errors import (
@@ -146,14 +147,6 @@ class SendGate(Protocol):
     async def check(
         self, session: AsyncSession, message: EmailMessage, account: ConnectedEmailAccount
     ) -> Clearance | Refusal: ...
-
-
-class MailboxCredentials(Protocol):
-    """Satisfied by :class:`~app.integrations.gmail.service.GmailService`."""
-
-    async def access_token(self, workspace_id: uuid.UUID, account_id: uuid.UUID) -> str: ...
-
-    async def mark_needs_reauth(self, workspace_id: uuid.UUID, account_id: uuid.UUID) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)

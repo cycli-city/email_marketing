@@ -28,6 +28,7 @@ import structlog
 
 from app.core.clock import Clock
 from app.core.redact import scrub_error
+from app.integrations.gmail.inbound import METADATA_HEADERS
 from app.providers.errors import (
     AuthError,
     ForbiddenReason,
@@ -63,6 +64,18 @@ class MessageRef:
     id: str
     thread_id: str
     internal_date: datetime | None = None  # when Gmail stored it (only from get_message_ref)
+
+
+class HistoryExpiredError(Exception):
+    """Google no longer holds the mailbox history from the stored point (typically after about a week, sometimes
+    sooner). The caller falls back to re-reading its own threads."""
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryPage:
+    messages: tuple[tuple[str, str], ...]  # (message id, thread id), oldest first
+    next_page_token: str | None
+    history_id: str | None  # the mailbox's current position, as of this page
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,7 +206,7 @@ class GmailApi:
         path: str,
         *,
         token: str,
-        params: dict[str, str] | None = None,
+        params: dict[str, str | list[str]] | None = None,
         json: dict[str, Any] | None = None,
         sending: bool = False,
     ) -> dict[str, Any]:
@@ -288,6 +301,80 @@ class GmailApi:
         )
 
     # ───────────────────────────── identity ─────────────────────────────
+
+    # ───────────────────────────── reading the inbox ─────────────────────────────
+
+    async def current_history_id(self, token: str) -> str:
+        """The mailbox's current history position: the starting point for incremental sync."""
+        body = await self._request("GET", "/profile", token=token)
+        history_id = body.get("historyId")
+        if not isinstance(history_id, str | int):
+            raise InvalidResponseError("Gmail's profile had no historyId")
+        return str(history_id)
+
+    async def history_page(
+        self, token: str, start_history_id: str, *, page_token: str | None = None
+    ) -> HistoryPage:
+        """Messages added since ``start_history_id``. Raises :class:`HistoryExpiredError` when Google no longer has
+        that point in history (a full re-sync is then required)."""
+        if not re.fullmatch(r"\d{1,20}", start_history_id):
+            raise PermanentProviderError("refusing to use a malformed history id")
+        params: dict[str, str | list[str]] = {
+            "startHistoryId": start_history_id,
+            "historyTypes": "messageAdded",
+            "maxResults": "100",
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        try:
+            body = await self._request("GET", "/history", token=token, params=params)
+        except PermanentProviderError as exc:
+            if exc.http_status == 404:
+                raise HistoryExpiredError(
+                    "Gmail no longer has that point in the mailbox history"
+                ) from exc
+            raise
+        added: list[tuple[str, str]] = []
+        for record in body.get("history") or []:
+            if not isinstance(record, dict):
+                continue
+            for item in record.get("messagesAdded") or []:
+                message = item.get("message") if isinstance(item, dict) else None
+                if isinstance(message, dict) and isinstance(message.get("id"), str):
+                    added.append((message["id"], str(message.get("threadId", ""))))
+        token_next = body.get("nextPageToken")
+        latest = body.get("historyId")
+        return HistoryPage(
+            messages=tuple(added),
+            next_page_token=token_next if isinstance(token_next, str) else None,
+            history_id=str(latest) if isinstance(latest, str | int) else None,
+        )
+
+    async def get_message(
+        self, token: str, message_id: str, *, full: bool = False
+    ) -> dict[str, Any]:
+        """One message. ``full=False`` fetches only the allow-listed headers (nothing else of the message is read)."""
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", message_id):
+            raise PermanentProviderError("refusing to fetch a malformed Gmail message id")
+        params: dict[str, str | list[str]] = (
+            {"format": "full"}
+            if full
+            else {"format": "metadata", "metadataHeaders": list(METADATA_HEADERS)}
+        )
+        return await self._request("GET", f"/messages/{message_id}", token=token, params=params)
+
+    async def thread_message_ids(self, token: str, thread_id: str) -> tuple[str, ...]:
+        """Ids of the messages in one thread (``format=minimal``: no content)."""
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", thread_id):
+            raise PermanentProviderError("refusing to fetch a malformed Gmail thread id")
+        body = await self._request(
+            "GET", f"/threads/{thread_id}", token=token, params={"format": "minimal"}
+        )
+        return tuple(
+            m["id"]
+            for m in body.get("messages") or []
+            if isinstance(m, dict) and isinstance(m.get("id"), str)
+        )
 
     async def list_send_as(self, token: str) -> list[SendAsAlias]:
         """The addresses this mailbox may send as. Needed because Gmail would otherwise silently rewrite a ``From``

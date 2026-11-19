@@ -46,6 +46,12 @@ Phases 2–8.
 2. Phase 2: Postgres job queue → ProviderManager → auth (BFF) → Gmail OAuth. **I need the Phase-2 keys listed in `.local/SECRETS.local.md`** (Supabase, Groq, Google OAuth).
 3. Public publication (only when the owner provides the new repo + new token — ADR-027).
 
+## Owner action checklist (agreed 2026-11-19)
+**Unblocks Phase 2 now:** (1) Supabase project → URL, anon key, service-role key, JWT secret, DB connection string (session/direct, `?sslmode=require`); (2) Groq API key; (3) NEW empty public repo (`ai-outreach-intelligence`) + NEW fine-grained token for it (Contents/Workflows/Actions read-write), then revoke the old token.
+**Long lead time (warm-up takes weeks) — start now:** (4) buy a separate sending domain (not `nexora-ai.co.in`); (5) Google Workspace Starter on it, 2 mailboxes (`divyansh@…`, `founder@…`), use them like a human for ~2 weeks; (6) tell me the domain + DNS host → I generate the exact SPF/DKIM/DMARC records; enable Google Postmaster Tools.
+**Soon:** (7) Telegram bot token (@BotFather) + chat id; (8) Google Cloud OAuth client (one External project, "In production") once the mailboxes exist; (9) the free-tier provider keys listed in `.local/SECRETS.local.md` (no rush; asked again at Phase 3).
+**Before the first real send (Phase 4):** NEXORA postal address for footers; may "paying client" be mentioned; student vs graduated wording.
+**Phase 8:** hosting for the dashboard (Vercel Hobby is non-commercial by contract) — I will research commercial-friendly options then.
 ## Open questions for the owner (ask only when blocking)
 1. **Public repo (ADR-027):** create a NEW empty public repo + a new fine-grained token for it (Contents, Workflows, Metadata rw; Actions rw); revoke the old token. I then publish one sanitised commit.
 2. **Sending setup (ADR-026):** approve the quality setup (dedicated cold-outreach domain + 2–3 Google Workspace mailboxes, Reply-To the founder address) or choose another option; supply registrar/DNS host when we get there.

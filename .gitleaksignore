@@ -1,0 +1,6 @@
+# gitleaks allowlist — exact finding fingerprints only (never whole files). Both are deliberate TEST FIXTURES:
+#
+# 1) A fake "GITHUB_TOKEN=tok_…" line used to test parsing of the local secrets file (not a real token).
+1101fd895cbb5c9ac1fd10ed00de735ebfc4e0fa:backend/tests/unit/test_scan_secrets.py:generic-api-key:102
+# 2) A JWT with `"alg":"none"` and an empty signature, used to prove that unsigned tokens are REJECTED.
+2be86cf285749de2095154bfc586ba7d245ee053:backend/tests/unit/test_security.py:jwt:115

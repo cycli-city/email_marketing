@@ -1,20 +1,39 @@
+# Each Dependabot PR runs the full CI (≈15–20 runner minutes; the free private-repo budget is 2,000/month),
+# so updates are batched, capped, and major versions are excluded: a major bump needs a deliberate, tested
+# upgrade (it is how `arq`'s redis<6 cap and similar constraints bite), not an automatic PR.
+# Security advisories still surface through Dependabot alerts.
 version: 2
 updates:
   - package-ecosystem: uv
     directory: /backend
     schedule:
       interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
     groups:
       python-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns: ["*"]

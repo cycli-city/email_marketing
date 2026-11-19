@@ -9,6 +9,7 @@ PY="$ROOT/backend/.venv/Scripts/python.exe"
 [ -x "$PY" ] || PY="$(command -v python3 || command -v python)"
 
 "$PY" scripts/scan_secrets.py --tree || { echo "pre-push: blocked — secrets detected." >&2; exit 1; }
+"$PY" scripts/prepublic_audit.py --tree --workflows || { echo "pre-push: blocked — personal data or unsafe workflow pattern (ADR-027)." >&2; exit 1; }
 
 if [ "$SKIP_PREPUSH_CHECKS" = "1" ]; then
   echo "pre-push: quality gates skipped (SKIP_PREPUSH_CHECKS=1)"

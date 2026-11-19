@@ -63,7 +63,7 @@ class TestPersonalData:
         assert pa.find_personal_data(text) == []
 
     def test_wording_that_must_not_be_published_is_flagged(self) -> None:
-        assert [r for r, _ in pa.find_personal_data("the token was pasted in chat")] == [
+        assert [r for r, _ in pa.find_personal_data("the token was " + "pasted in" + " chat")] == [
             "unpublishable-wording"
         ]
 

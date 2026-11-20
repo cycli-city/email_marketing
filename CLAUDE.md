@@ -35,7 +35,7 @@ Full model in `docs/SECURITY.md`; decisions ADR-014…020. Non-negotiable:
 - Git hooks are enabled with `git config core.hooksPath .githooks` (already set here). Never use `--no-verify`. `SKIP_PREPUSH_CHECKS=1` skips only the slow gates, never the secret scan.
 - Push with `python scripts/github.py push` (token via environment only). Watch CI with `python scripts/github.py wait`; read failures with `rlogs RUN_ID STEP_NAME`.
 - Frontend: strict nonce CSP in `src/proxy.ts`; pages are dynamic; **no** `dangerouslySetInnerHTML`/`eval`/inline `<style>`/`javascript:` (ESLint enforces). New UI libs must support CSP nonces (check before adding — `sonner` did not).
-- Backend: production config must keep TLS-to-everything validators passing; every new public route needs rate-limit consideration; outbound HTTP is HTTPS-only, no cross-host redirects; any code that fetches a user/third-party-supplied URL must go through the SSRF guard (Phase 3).
+- Backend: production config must keep TLS-to-everything validators passing; every new public route needs rate-limit consideration; outbound HTTP is HTTPS-only, no cross-host redirects; any code that fetches a user/third-party-supplied URL must go through `app/integrations/web/fetcher.py` (the SSRF guard, ADR-038) — never call `httpx.get(url)` on such a URL.
 - Add or change a security control ⇒ add a test that **proves it blocks the attack**, then update `docs/SECURITY.md`.
 - Pin third-party GitHub Actions to commit SHAs (resolve via the API; Dependabot updates them); keep build-only tooling in `devDependencies`.
 

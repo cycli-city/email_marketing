@@ -7,11 +7,13 @@ import httpx
 
 from app.core.clock import Clock
 from app.core.config import Settings
+from app.providers.adapters.abstract import AbstractEmailProvider
 from app.providers.adapters.geoapify import GeoapifyProvider
 from app.providers.adapters.hunter import HunterProvider
 from app.providers.adapters.mailboxvalidator import MailboxValidatorProvider
 from app.providers.adapters.search import BraveSearchProvider, TavilyProvider
 from app.providers.adapters.verifalia import VerifaliaProvider
+from app.providers.adapters.zerobounce import ZeroBounceProvider
 from app.providers.registry import ProviderRegistry
 
 
@@ -35,6 +37,12 @@ def build_discovery_registry(
         MailboxValidatorProvider(
             api_key=settings.mailboxvalidator_api_key, client=client, clock=clock
         )
+    )
+    registry.register(
+        ZeroBounceProvider(api_key=settings.zerobounce_api_key, client=client, clock=clock)
+    )
+    registry.register(
+        AbstractEmailProvider(api_key=settings.abstract_email_api_key, client=client, clock=clock)
     )
     registry.register(TavilyProvider(api_key=settings.tavily_api_key, client=client, clock=clock))
     registry.register(

@@ -19,6 +19,8 @@ KEYS = {
     "verifalia_username": "user-name",
     "verifalia_password": "pass-word-123",
     "mailboxvalidator_api_key": "m" * 20,
+    "zerobounce_api_key": "z" * 20,
+    "abstract_email_api_key": "a" * 20,
     "tavily_api_key": "tvly-" + "t" * 20,
     "brave_search_api_key": "BSA" + "b" * 20,
 }
@@ -45,7 +47,7 @@ def test_with_all_keys_everything_is_configured() -> None:
 
 def test_without_keys_providers_are_listed_but_not_configured() -> None:
     providers = registry().all()
-    assert len(providers) == 6
+    assert len(providers) == 8
     assert not any(p.configured for p in providers)
 
 
@@ -63,7 +65,7 @@ def test_verification_needs_both_verifalia_credentials() -> None:
 
 def test_only_verifiers_may_receive_a_prospects_address() -> None:
     cleared = {p.spec.key for p in registry(**KEYS).all() if p.spec.may_receive_personal_data}
-    assert cleared == {"verifalia", "mailboxvalidator"}
+    assert cleared == {"verifalia", "mailboxvalidator", "zerobounce", "abstract"}
 
 
 def test_provider_keys_are_unique_per_capability() -> None:

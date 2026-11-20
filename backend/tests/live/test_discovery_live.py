@@ -17,11 +17,13 @@ import pytest
 from pydantic import SecretStr
 
 from app.core.clock import FakeClock
+from app.providers.adapters.abstract import AbstractEmailProvider
 from app.providers.adapters.geoapify import GeoapifyProvider
 from app.providers.adapters.hunter import HunterProvider
 from app.providers.adapters.mailboxvalidator import MailboxValidatorProvider
 from app.providers.adapters.search import BraveSearchProvider, TavilyProvider
 from app.providers.adapters.verifalia import VerifaliaProvider
+from app.providers.adapters.zerobounce import ZeroBounceProvider
 from app.providers.discovery import PlaceQuery
 
 pytestmark = [
@@ -98,3 +100,18 @@ async def test_brave_searches(client: httpx.AsyncClient) -> None:
     hits = (await provider.web_search("dental clinic austin", limit=3)).value
     assert hits
     assert all(h.url.startswith("http") for h in hits)
+
+
+async def test_zerobounce_gives_a_verdict_and_reports_credits(client: httpx.AsyncClient) -> None:
+    provider = ZeroBounceProvider(api_key=secret("ZEROBOUNCE_API_KEY"), client=client, clock=CLOCK)
+    assert await provider.credits() >= 0  # a bad key would be -1
+    outcome = (await provider.verify_email("contact@example.com")).value
+    assert outcome.verdict == "undeliverable"  # example.com accepts no mail
+
+
+async def test_abstract_email_reputation_gives_a_verdict(client: httpx.AsyncClient) -> None:
+    provider = AbstractEmailProvider(
+        api_key=secret("ABSTRACT_EMAIL_API_KEY"), client=client, clock=CLOCK
+    )
+    outcome = (await provider.verify_email("contact@example.com")).value
+    assert outcome.verdict == "undeliverable"

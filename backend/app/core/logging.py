@@ -34,6 +34,10 @@ def _redact(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
 
 
 def configure_logging(level: str = "INFO", *, json_output: bool = True) -> None:
+    # Some vendors only take their key in the query string; the HTTP client libraries log full request URLs at INFO.
+    # Keep them quiet whatever the root logger is set to, so a key can never reach a log line that way.
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,

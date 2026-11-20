@@ -140,3 +140,23 @@ Phase 2: Supabase (URL, anon key, service-role key, DB connection string — dir
 Phase 3: Hunter, PDL, Verifalia, ZeroBounce, Abstract (+MailboxValidator), Tavily, Brave, Firecrawl (optional), Geoapify, Companies House, Adzuna, Jooble, GitHub Models / NVIDIA NIM / Cloudflare Workers AI / OpenRouter.
 Phase 4–5: Telegram bot token + chat id; DNS access for `nexora-ai.co.in` (SPF/DKIM/DMARC).
 Phase 8: Render API key, Vercel token (+ protection-bypass secret).
+
+## 11. Verified against the real services on the owner's keys (2026-11-20)
+One cheap call per provider, then adapters written from the **observed** shapes (never from documentation alone — that is how
+Gmail's Message-ID rewriting slipped past the first design, ADR-035). Fixtures in `tests/unit/test_discovery_adapters.py` use
+fictional data in these shapes; `tests/live/test_discovery_live.py` re-checks all six adapters on demand.
+
+| Provider | Observed | Notes that matter |
+|---|---|---|
+| **Geoapify Places** | 200 GeoJSON; `properties.{name, website, contact.{phone,email}, address_line2, city, country_code, categories, lat, lon, place_id}` | `contact.email` is what the business published in OSM → a *published* address. Bad key: `401 {"message":"Invalid apiKey"}`. Key only via `?apiKey=` (hence log pinning + scrubbing). |
+| **Hunter** | `domain-search` 200; per-email `value, type, confidence, first/last_name, position, seniority, department, sources[].uri, verification.status`; credits in `x-credits-used`; account: 50 credits, 1 per domain search | Key via `X-API-KEY` header. Also returns LinkedIn/Twitter/phone → dropped by the adapter. Bad key: `401 {"errors":[{"id":"authentication_failed"}]}`. |
+| **Verifalia** | single address: `POST /v2.6/email-validations` → **200 already Completed**; `GET …/{id}/entries` → `classification` (Deliverable/Risky/Undeliverable/Unknown) + `status` + `isRoleAccount` + `isFreeEmailAddress`; balance `freeCredits: 25` | Basic auth. `contact@example.com` → `Undeliverable / DomainHasNullMx`. |
+| **MailboxValidator** | flat booleans: `is_syntax, is_domain, is_smtp, is_verified (null = could not check), is_disposable, is_role, is_free, …` | Bad key: `401 {"error":{"error_code":10001,…}}`. `is_verified: null` must never read as deliverable. Key only via `?key=`. |
+| **Tavily** | `POST /search` Bearer → `results[{url,title,content,score}]` | Bad key `401 {"detail":{"error":…}}`. |
+| **Brave Search** | `GET …/web/search` → `web.results[{title,url,description}]`; `x-ratelimit-*` headers | **A bad key answers HTTP 422 (`SUBSCRIPTION_TOKEN_INVALID`), not 401** — a default mapping would retry a dead key forever. No right to store results: `tier="transient"`. |
+| Firecrawl | credit-usage 200, 1,000 credits (v1 endpoint deprecated → v2) | adapter not built yet (own crawler is the default). |
+| Companies House | 200, 600 requests / 5 min (`X-Ratelimit-*`) | adapter not built yet (UK targets). |
+| Adzuna / Jooble | 200 job results | adapters not built yet (Job Hunter sources). |
+| People Data Labs | 200 company enrich; 100 lookups, `X-TotalLimit-Remaining` | adapter not built yet. |
+| **ZeroBounce** | key accepted, but **account shows 0 credits** → `validate` fails | needs the owner: activate the free monthly credits. |
+| **Abstract** | **`401 Invalid API key`** | needs the owner: the key must be for the *Email Validation* API (each Abstract API has its own key). |

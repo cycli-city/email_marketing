@@ -100,6 +100,21 @@ class Settings(BaseSettings):
     # ── optional discovery / verification / notification providers ──
     hunter_api_key: SecretStr | None = None
     firecrawl_api_key: SecretStr | None = None
+    # lead discovery / verification / research providers (docs/PROVIDERS.md); each is optional: a provider without its
+    # key is simply "not configured" and the manager routes around it
+    geoapify_api_key: SecretStr | None = None
+    verifalia_username: SecretStr | None = None
+    verifalia_password: SecretStr | None = None
+    mailboxvalidator_api_key: SecretStr | None = None
+    zerobounce_api_key: SecretStr | None = None
+    abstract_email_api_key: SecretStr | None = None
+    tavily_api_key: SecretStr | None = None
+    brave_search_api_key: SecretStr | None = None
+    pdl_api_key: SecretStr | None = None
+    companies_house_api_key: SecretStr | None = None
+    adzuna_app_id: str | None = None
+    adzuna_app_key: SecretStr | None = None
+    jooble_api_key: SecretStr | None = None
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: str | None = None
 

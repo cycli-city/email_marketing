@@ -28,6 +28,24 @@ DASHBOARD_URL = "http://localhost:3000"
 API_URL = "http://localhost:8000"
 DB_NAME = "live"
 
+PROVIDER_KEYS = (
+    "GROQ_API_KEY",
+    "HUNTER_API_KEY",
+    "GEOAPIFY_API_KEY",
+    "VERIFALIA_USERNAME",
+    "VERIFALIA_PASSWORD",
+    "MAILBOXVALIDATOR_API_KEY",
+    "ZEROBOUNCE_API_KEY",
+    "ABSTRACT_EMAIL_API_KEY",
+    "TAVILY_API_KEY",
+    "BRAVE_SEARCH_API_KEY",
+    "FIRECRAWL_API_KEY",
+    "PDL_API_KEY",
+    "COMPANIES_HOUSE_API_KEY",
+    "ADZUNA_APP_ID",
+    "ADZUNA_APP_KEY",
+    "JOOBLE_API_KEY",
+)
 _LINE = re.compile(r"^\s*-\s*([A-Z][A-Z0-9_]+)=(.*)$")
 
 
@@ -76,8 +94,9 @@ def backend_env(secrets: dict[str, str]) -> dict[str, str]:
         GOOGLE_CLIENT_SECRET=secrets["GOOGLE_CLIENT_SECRET"],
         GOOGLE_REDIRECT_URI=secrets["GOOGLE_REDIRECT_URI"],
     )
-    if "GROQ_API_KEY" in secrets:
-        env["GROQ_API_KEY"] = secrets["GROQ_API_KEY"]
+    for name in PROVIDER_KEYS:  # optional: a provider without its key is simply "not configured"
+        if name in secrets:
+            env[name] = secrets[name]
     return env
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
@@ -17,6 +18,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, WorkspaceScopedMixin
@@ -102,3 +104,32 @@ class ProviderUsageEvent(Base, UUIDPrimaryKeyMixin, WorkspaceScopedMixin):
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     error_class: Mapped[str | None] = mapped_column(String(120))
     task_ref: Mapped[str | None] = mapped_column(String(200))
+
+
+class ProviderLookup(Base, UUIDPrimaryKeyMixin, WorkspaceScopedMixin):
+    """The lookup ledger (ADR-028 §3): what we already asked a credit-limited provider, and what it said.
+
+    Keyed by *what was asked* (``operation`` + normalised ``input_key``), **not** by vendor: an answer from any provider
+    is reused for the same question, so no credit is ever spent twice. ``found=False`` is a cached negative answer
+    ("nothing found for this domain"), kept for a shorter time so it is eventually retried.
+    """
+
+    __tablename__ = "provider_lookups"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "operation", "input_key"),
+        Index("ix_provider_lookups_expiry", "expires_at"),
+    )
+
+    operation: Mapped[str] = mapped_column(String(64))  # e.g. "contacts:domain", "verify:email"
+    input_key: Mapped[str] = mapped_column(
+        String(400)
+    )  # normalised input (a registrable domain, a lower-cased address)
+    answered_by: Mapped[str] = mapped_column(
+        String(64)
+    )  # the provider that produced the answer (provenance)
+    found: Mapped[bool]
+    result: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
+    looked_up_at: Mapped[datetime]
+    expires_at: Mapped[datetime]

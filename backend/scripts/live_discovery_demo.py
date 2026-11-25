@@ -31,39 +31,10 @@ from app.domain.identity import (  # noqa: E402
     is_role_address,
 )
 from app.integrations.dns_checks import mail_status  # noqa: E402
-from app.integrations.web.extract import FoundEmail, candidate_pages, extract_emails  # noqa: E402
-from app.integrations.web.fetcher import FetchError, SafeFetcher, build_crawler_client  # noqa: E402
+from app.integrations.web.fetcher import SafeFetcher, build_crawler_client  # noqa: E402
 from app.providers.adapters.geoapify import GeoapifyProvider  # noqa: E402
 from app.providers.discovery import CompanyHit, PlaceQuery  # noqa: E402
-
-MAX_PAGES_PER_SITE = 3
-
-
-async def read_site(
-    fetcher: SafeFetcher, website: str
-) -> tuple[list[FoundEmail], list[str], str | None]:
-    """Home page, then the most promising contact/about pages. Returns (emails, pages read, why it stopped early)."""
-    emails: dict[str, FoundEmail] = {}
-    read: list[str] = []
-    queue = [website]
-    seen: set[str] = set()
-    problem: str | None = None
-    while queue and len(read) < MAX_PAGES_PER_SITE:
-        url = queue.pop(0)
-        if url in seen:
-            continue
-        seen.add(url)
-        try:
-            page = await fetcher.fetch(url)
-        except FetchError as exc:
-            problem = problem or exc.reason + (" (unsafe)" if exc.unsafe else "")
-            continue
-        read.append(page.url)
-        for found in extract_emails(page.text, page.url):
-            emails.setdefault(found.address, found)
-        if len(read) == 1:
-            queue.extend(candidate_pages(page.text, page.url, limit=MAX_PAGES_PER_SITE - 1))
-    return sorted(emails.values(), key=lambda e: (not e.same_site, e.address)), read, problem
+from app.services.discovery.crawl import SiteReader  # noqa: E402
 
 
 async def main() -> None:
@@ -84,7 +55,7 @@ async def main() -> None:
         api_key=SecretStr(secrets["GEOAPIFY_API_KEY"]), client=api, clock=SYSTEM_CLOCK
     )
     crawler = build_crawler_client()
-    fetcher = SafeFetcher(client=crawler)
+    reader = SiteReader(SafeFetcher(client=crawler))
 
     print(f"Searching for '{args.category}' within {args.radius} m of ({args.lat}, {args.lon}) ...")
     hits = (
@@ -118,12 +89,12 @@ async def main() -> None:
         if hit.email:
             candidates[hit.email] = ("published in OpenStreetMap via Geoapify", "")
         if hit.website:
-            emails, pages, problem = await read_site(fetcher, hit.website)
+            reading = await reader.read(hit.website)
             print(
-                f"   read {len(pages)} page(s) of their site"
-                + (f"; stopped: {problem}" if problem else "")
+                f"   read {len(reading.pages)} page(s) of their site"
+                + (f"; stopped: {reading.problem}" if reading.problem else "")
             )
-            for found in emails:
+            for found in reading.emails:
                 candidates.setdefault(
                     found.address,
                     (

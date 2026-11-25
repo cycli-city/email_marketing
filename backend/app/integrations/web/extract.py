@@ -157,6 +157,15 @@ def extract_emails(html: str, page_url: str) -> list[FoundEmail]:
     )
 
 
+def visible_text(html: str, *, limit: int = 100_000) -> str:
+    """The text a visitor would read — scripts, styles and templates removed — single-spaced and bounded. Used to confirm that
+    a page really is about the business we think it is."""
+    soup = BeautifulSoup(html[:MAX_HTML_CHARS], "lxml")
+    for hidden in soup(["script", "style", "noscript", "template"]):
+        hidden.decompose()
+    return " ".join(soup.get_text(" ").split())[:limit]
+
+
 def _plausible(raw: str) -> str | None:
     address = normalise_email(raw.strip().strip(".,;:()[]<>\"'"))
     if address is None:

@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 
 import tldextract
 
+from app.domain.enums import SubscriberType
 from app.integrations.gmail.mime import ADDRESS_RE
 
 # The public-suffix list ships inside the package; never download it at runtime (no network at import or first use).
@@ -122,6 +123,17 @@ def is_role_address(value: str | None) -> bool:
 
 def is_free_mail(value: str | None) -> bool:
     return email_domain(value) in FREE_MAIL_DOMAINS
+
+
+def subscriber_type_for(value: str | None) -> SubscriberType:
+    """Company or individual? A personal mailbox (free-mail, disposable) belongs to an individual; an address at a business's
+    own domain is read as a company's. That is the usual B2B reading but not always the legal one — a sole trader at their
+    own domain is an individual subscriber in the UK and EU — so countries where it matters get their own policy."""
+    if normalise_email(value) is None:
+        return SubscriberType.UNKNOWN
+    if is_free_mail(value) or is_disposable(value):
+        return SubscriberType.INDIVIDUAL
+    return SubscriberType.CORPORATE
 
 
 def is_disposable(value: str | None) -> bool:

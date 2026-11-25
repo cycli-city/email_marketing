@@ -159,6 +159,15 @@
         "title": "ConnectResponse",
         "type": "object"
       },
+      "ConsentPolicy": {
+        "enum": [
+          "allowed",
+          "requires_consent",
+          "blocked"
+        ],
+        "title": "ConsentPolicy",
+        "type": "string"
+      },
       "ExchangeRequest": {
         "properties": {
           "code": {
@@ -247,6 +256,182 @@
         "title": "MeResponse",
         "type": "object"
       },
+      "PoliciesResponse": {
+        "properties": {
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyOut"
+            },
+            "title": "Policies",
+            "type": "array"
+          },
+          "unreviewed": {
+            "title": "Unreviewed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "policies",
+          "unreviewed"
+        ],
+        "title": "PoliciesResponse",
+        "type": "object"
+      },
+      "PolicyOut": {
+        "properties": {
+          "cold_b2b_marketing": {
+            "$ref": "#/components/schemas/ConsentPolicy"
+          },
+          "cold_to_individuals": {
+            "$ref": "#/components/schemas/ConsentPolicy"
+          },
+          "country": {
+            "title": "Country",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "requires_postal_address": {
+            "title": "Requires Postal Address",
+            "type": "boolean"
+          },
+          "requires_sender_identification": {
+            "default": true,
+            "title": "Requires Sender Identification",
+            "type": "boolean"
+          },
+          "requires_unsubscribe": {
+            "title": "Requires Unsubscribe",
+            "type": "boolean"
+          },
+          "reviewed_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed On"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "country",
+          "cold_b2b_marketing",
+          "cold_to_individuals",
+          "requires_unsubscribe",
+          "requires_postal_address",
+          "notes",
+          "reviewed_on",
+          "version"
+        ],
+        "title": "PolicyOut",
+        "type": "object"
+      },
+      "PolicyPatch": {
+        "properties": {
+          "acknowledge_loosening": {
+            "default": false,
+            "title": "Acknowledge Loosening",
+            "type": "boolean"
+          },
+          "cold_b2b_marketing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsentPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cold_to_individuals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConsentPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mark_reviewed": {
+            "default": true,
+            "title": "Mark Reviewed",
+            "type": "boolean"
+          },
+          "requires_postal_address": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Postal Address"
+          },
+          "requires_unsubscribe": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Unsubscribe"
+          }
+        },
+        "title": "PolicyPatch",
+        "type": "object"
+      },
+      "ProfileSlot": {
+        "properties": {
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/CampaignMode"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SenderProfileOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "profile",
+          "missing"
+        ],
+        "title": "ProfileSlot",
+        "type": "object"
+      },
       "ReadyResponse": {
         "properties": {
           "checks": {
@@ -274,6 +459,152 @@
           "checks"
         ],
         "title": "ReadyResponse",
+        "type": "object"
+      },
+      "SenderProfileIn": {
+        "description": "Bounded on the way in; the service cleans and validates further.",
+        "properties": {
+          "display_name": {
+            "maxLength": 400,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "postal_address": {
+            "anyOf": [
+              {
+                "maxLength": 1500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postal Address"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "signature_text": {
+            "anyOf": [
+              {
+                "maxLength": 6000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signature Text"
+          },
+          "website": {
+            "anyOf": [
+              {
+                "maxLength": 600,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website"
+          }
+        },
+        "required": [
+          "display_name"
+        ],
+        "title": "SenderProfileIn",
+        "type": "object"
+      },
+      "SenderProfileOut": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "postal_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Postal Address"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "signature_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signature Text"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "website": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website"
+          }
+        },
+        "required": [
+          "display_name",
+          "postal_address",
+          "reply_to",
+          "signature_text",
+          "website",
+          "updated_at"
+        ],
+        "title": "SenderProfileOut",
+        "type": "object"
+      },
+      "SenderProfilesResponse": {
+        "properties": {
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileSlot"
+            },
+            "title": "Profiles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "profiles"
+        ],
+        "title": "SenderProfilesResponse",
         "type": "object"
       },
       "TestResponse": {
@@ -623,6 +954,163 @@
         "summary": "The authenticated owner",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/settings/policies": {
+      "get": {
+        "operationId": "get_policies_api_v1_settings_policies_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoliciesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sending policy per country (the conservative defaults are created on first use)",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/policies/{country}": {
+      "patch": {
+        "operationId": "patch_policy_api_v1_settings_policies__country__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "maxLength": 2,
+              "minLength": 2,
+              "pattern": "^[A-Za-z]{2}$",
+              "title": "Country",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No policy for that country"
+          },
+          "422": {
+            "description": "The change loosens the policy and was not acknowledged"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Review or change one country's policy",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/sender-profiles": {
+      "get": {
+        "operationId": "get_sender_profiles_api_v1_settings_sender_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SenderProfilesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sender identity for each mode",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/v1/settings/sender-profiles/{mode}": {
+      "put": {
+        "operationId": "put_sender_profile_api_v1_settings_sender_profiles__mode__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mode",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CampaignMode"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SenderProfileIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileSlot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "A field is not acceptable; ``details.field`` says which"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save the sender identity for a mode (replaces it as a whole)",
+        "tags": [
+          "settings"
         ]
       }
     },

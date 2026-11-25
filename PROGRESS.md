@@ -1,6 +1,6 @@
 # PROGRESS — live status & feature-completion report
 
-_Last updated: 2026-11-20. Update this file after every meaningful change._
+_Last updated: 2026-11-25. Update this file after every meaningful change._
 
 Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depends on external approval · ⬜ not started · 🚧 in progress
 
@@ -22,6 +22,9 @@ Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depe
 | 3b | **Discovery provider adapters** (ADR-039) | ✅ built & verified live | Geoapify (businesses), Hunter (contacts), Verifalia + MailboxValidator + ZeroBounce + Abstract (verification), Tavily + Brave (search) behind vendor-neutral capabilities; written from the **observed** responses of the real services, 6 live tests pass, 91 unit tests, 10 mutation checks. Found on the way: Brave reports an invalid key as HTTP 422. ZeroBounce's credits were activated and Abstract turned out to be a renamed product (new endpoint) — both now built and verified live. |
 | 3c | **Discovery core** (ADR-040) | ✅ built & run live | Canonical identity/dedupe rules, published-only contact extraction (mailto, text, Cloudflare-protected, JSON-LD) with provenance, free MX/role/disposable checks, and a live demo (`backend/scripts/live_discovery_demo.py`). First real run: 6 businesses → 1 published address (many small businesses publish a form only) — so website discovery by search + Hunter are next. 154 tests, 12 mutation checks. |
 | 8a | **Deployment prepared** (ADR-041) | ✅ prepared, 🟡 **awaiting the owner's Render account** | `render.yaml` (two always-on services), `docs/DEPLOYMENT.md` runbook, `make_render_env.py` (paste-ready, validated, gitignored env files with production-only keys), 15 tests. The production Supabase database is still two migrations behind; the first deploy upgrades it automatically. |
+| 3d | **Lookup ledger, lead store, website discovery, enrichment** (ADR-042) | ✅ built & tested | One credit per question (cached positive/negative answers), duplicate-proof company/contact store with gap-filling merge and provenance, verification rules (a guess, a catch-all or an MX check alone can never be `verified`), website discovery by search with a two-step identity check, and the enrichment pipeline that ties them together. 182 tests (ledger 12, store 72, website matching 33, site reader 10, codec 6, enrichment 35, subscriber classification 14). Next: queue tasks + API for discovery jobs. |
+| 4a | **Compliance gate + unsubscribe** (ADR-043) | ✅ built & tested | Pure gate (every reason reported; guessed/invalid/suppressed/closed-lead/unnamed-sender can never be configured away; per-country policies as data), DB glue in front of the sender, signed non-expiring unsubscribe links with RFC 8058 one-click, a public `/u/{token}` page that only acts on POST, and the idempotent opt-out. 196 tests (pure gate 103, database-backed gate 43, links 17, opt-out action 17, public route 16). Next: sender profile + policy settings, campaigns/templates, generation, approval flow. |
+| 4b | **Sending settings: country policies, sender identity, Settings → Sending page** (ADR-044) | ✅ built & tested | Conservative per-country defaults seeded as reviewable data (nothing cold-mailed to the EU/EEA until reviewed), loosening needs confirmation and is audited, validated sender identity with an exact "what is still missing", the dashboard page, `docs/COMPLIANCE.md`. 167 backend tests (defaults 88, seeding and editing 19, validation 23, profile storage 8, settings API 21, document sync 8), 15 component tests and 5 end-to-end specs including a WCAG A/AA scan; the scan also found a contrast failure in the shared destructive badge (4.0:1), fixed at the source. **Owner action:** enter the NEXORA name + postal address, review the target countries. |
 | 3 | Lead discovery (Overture/OSM/Geoapify + SSRF-guarded crawler, extraction, verification, qualification) | ⬜ | Sources in `docs/PROVIDERS.md`. |
 | 4 | Outreach (templates, generation, campaigns, sender adapters, approvals, adaptive ramp) | ⬜ | Sending architecture: ADR-025/026. |
 | 5 | Reply intelligence (sync, classify, notify, follow-ups) | ⬜ | |
@@ -29,9 +32,9 @@ Legend: ✅ done & tested · 🟡 implemented, awaiting credentials · 🔒 depe
 | 7 | Testing & hardening | ⬜ | |
 | 8 | Deployment (Supabase, Render, Vercel) + docs | ⬜ | Hosting terms open (ADR-023). |
 
-## Quality gate (local, 2026-11-19)
-Backend: `ruff` ✅ · `ruff format` ✅ · `mypy --strict` ✅ (149 files) · `pytest` ✅ **1,184 passed** (+4 opt-in live tests against the real Groq API, run on demand) (unit + integration on real PostgreSQL 16) · OpenAPI export current ✅.
-Frontend: `eslint` (incl. XSS-sink bans) ✅ · `tsc` ✅ · `prettier` ✅ · `vitest` ✅ **179 passed** · `next build` ✅ · **Playwright 52/52 against the real API + Postgres + a fake Supabase Auth** incl. login/logout, cookie flags, no token in JS/storage/HTML/responses, forged-session rejection, session refresh, CSRF checks, axe WCAG A/AA, nonce CSP, blocked injection/exfiltration/clickjacking.
+## Quality gate (local, 2026-11-25)
+Backend: `ruff` ✅ · `ruff format` ✅ · `mypy --strict` ✅ (189 files) · `pytest` ✅ **1,981 passed, 12 skipped** (the skips are the opt-in live-provider tests, run on demand) (unit + integration on real PostgreSQL 16) · OpenAPI export current ✅.
+Frontend: `eslint` (incl. XSS-sink bans) ✅ · `tsc` ✅ · `prettier` ✅ · `vitest` ✅ **197 passed** · `next build` ✅ · **Playwright 57/57 against the real API + Postgres + a fake Supabase Auth** incl. login/logout, cookie flags, no token in JS/storage/HTML/responses, forged-session rejection, session refresh, CSRF checks, axe WCAG A/AA, nonce CSP, blocked injection/exfiltration/clickjacking.
 Security/public-readiness: `scan_secrets.py` clean (tree, history, browser bundle) ✅ · `prepublic_audit.py` clean on tree + workflows ✅ · **git history fails the audit by design** (ADR-027) ⇒ publish via a clean-slate repo.
 
 ## Feature-completion report (REQUIREMENTS.md §21)
@@ -55,7 +58,7 @@ Phases 2–8.
 
 ## Next up (in order)
 1. Push this work to the (still private) repo; confirm CI green without Redis.
-2. Phase 2: ~~Postgres job queue~~ ✅ → ~~ProviderManager + Groq~~ ✅ → ~~Supabase auth with BFF cookie sessions~~ ✅ (live-verified) → ~~Gmail OAuth + token store~~ ✅ (needs the owner to connect a mailbox) → ~~Gmail send adapter + exactly-once sender~~ ✅ (ADR-035) ~~Inbox sync~~ ✅ (ADR-036) ~~queue + background tasks wired into the app~~ ✅ (ADR-037) → next: **Phase 3 lead discovery** (provider adapters for the stored keys behind the ProviderManager, SSRF-guarded crawler, verification, dedupe), then the compliance gate + campaign pipeline.
+2. Phase 2: ~~Postgres job queue~~ ✅ → ~~ProviderManager + Groq~~ ✅ → ~~Supabase auth with BFF cookie sessions~~ ✅ (live-verified) → ~~Gmail OAuth + token store~~ ✅ (needs the owner to connect a mailbox) → ~~Gmail send adapter + exactly-once sender~~ ✅ (ADR-035) ~~Inbox sync~~ ✅ (ADR-036) ~~queue + background tasks wired into the app~~ ✅ (ADR-037) → ~~Phase 3 discovery building blocks~~ ✅ (provider adapters, SSRF-guarded crawler, lookup ledger, duplicate-proof store, website discovery, enrichment — ADR-038…042) ~~compliance gate, unsubscribe, country policies, sender identity + Settings page~~ ✅ (ADR-043/044) → next: **discovery jobs** (queue tasks with a resumable cursor + API + dashboard page), then **campaigns, templates, grounded generation, approval flow, adaptive send ramp and the `outreach.send_message` task** (Phase 4), reply classification and follow-ups (Phase 5), the remaining dashboard pages (Phase 6).
    Then wire queue + manager into app startup together with the first real task handlers (Phase 3), and the Groq-based prompt-injection guard (Prompt Guard 2) when reply classification is built.
 3. Public publication (only when the owner provides the new repo + new token — ADR-027).
 
@@ -64,7 +67,7 @@ Phases 2–8.
 **Long lead time (warm-up takes weeks) — start now:** (4) buy a separate sending domain (not `nexora-ai.co.in`) — **owner will buy later; NEXORA real sending waits for it (Job Hunter can start earlier)**; (5) Google Workspace Starter on it, 2 mailboxes (`divyansh@…`, `founder@…`), use them like a human for ~2 weeks; (6) tell me the domain + DNS host → I generate the exact SPF/DKIM/DMARC records; enable Google Postmaster Tools.
 **Resolved 2026-11-20:** ZeroBounce credits activated (100); Abstract's key works on the renamed *Email Reputation* API.
 **Soon:** (7) Telegram bot token (@BotFather) + chat id; (8) Google Cloud OAuth client (one External project, "In production") once the mailboxes exist; (9) the free-tier provider keys listed in `.local/SECRETS.local.md` (no rush; asked again at Phase 3).
-**Before the first real send (Phase 4):** NEXORA postal address for footers; may "paying client" be mentioned; student vs graduated wording.
+**Before the first real send (Phase 4):** enter the NEXORA sender name + **postal address** (Settings → Sending — the system refuses to send without it) and review the countries you target there (nothing goes to the EU/EEA until you do); may "paying client" be mentioned; student vs graduated wording.
 **Phase 8:** decided in ADR-041 (Render for both services, Supabase for the database); the owner creates the Render account + card, then follows `docs/DEPLOYMENT.md`.
 ## Open questions for the owner (ask only when blocking)
 1. **Public repo (ADR-027):** create a NEW empty public repo + a new fine-grained token for it (Contents, Workflows, Metadata rw; Actions rw); revoke the old token. I then publish one sanitised commit.

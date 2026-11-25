@@ -106,6 +106,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sending policy per country (the conservative defaults are created on first use) */
+        get: operations["get_policies_api_v1_settings_policies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/policies/{country}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Review or change one country's policy */
+        patch: operations["patch_policy_api_v1_settings_policies__country__patch"];
+        trace?: never;
+    };
+    "/api/v1/settings/sender-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sender identity for each mode */
+        get: operations["get_sender_profiles_api_v1_settings_sender_profiles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/sender-profiles/{mode}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save the sender identity for a mode (replaces it as a whole) */
+        put: operations["put_sender_profile_api_v1_settings_sender_profiles__mode__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -197,6 +265,11 @@ export interface components {
             /** Authorization Url */
             authorization_url: string;
         };
+        /**
+         * ConsentPolicy
+         * @enum {string}
+         */
+        ConsentPolicy: "allowed" | "requires_consent" | "blocked";
         /** ExchangeRequest */
         ExchangeRequest: {
             /** Code */
@@ -245,6 +318,61 @@ export interface components {
              */
             workspace_id: string;
         };
+        /** PoliciesResponse */
+        PoliciesResponse: {
+            /** Policies */
+            policies: components["schemas"]["PolicyOut"][];
+            /** Unreviewed */
+            unreviewed: number;
+        };
+        /** PolicyOut */
+        PolicyOut: {
+            cold_b2b_marketing: components["schemas"]["ConsentPolicy"];
+            cold_to_individuals: components["schemas"]["ConsentPolicy"];
+            /** Country */
+            country: string;
+            /** Notes */
+            notes: string | null;
+            /** Requires Postal Address */
+            requires_postal_address: boolean;
+            /**
+             * Requires Sender Identification
+             * @default true
+             */
+            requires_sender_identification: boolean;
+            /** Requires Unsubscribe */
+            requires_unsubscribe: boolean;
+            /** Reviewed On */
+            reviewed_on: string | null;
+            /** Version */
+            version: number;
+        };
+        /** PolicyPatch */
+        PolicyPatch: {
+            /**
+             * Acknowledge Loosening
+             * @default false
+             */
+            acknowledge_loosening: boolean;
+            cold_b2b_marketing?: components["schemas"]["ConsentPolicy"] | null;
+            cold_to_individuals?: components["schemas"]["ConsentPolicy"] | null;
+            /**
+             * Mark Reviewed
+             * @default true
+             */
+            mark_reviewed: boolean;
+            /** Requires Postal Address */
+            requires_postal_address?: boolean | null;
+            /** Requires Unsubscribe */
+            requires_unsubscribe?: boolean | null;
+        };
+        /** ProfileSlot */
+        ProfileSlot: {
+            /** Missing */
+            missing: string[];
+            mode: components["schemas"]["CampaignMode"];
+            profile: components["schemas"]["SenderProfileOut"] | null;
+        };
         /** ReadyResponse */
         ReadyResponse: {
             /** Checks */
@@ -256,6 +384,45 @@ export interface components {
              * @enum {string}
              */
             status: "ready" | "degraded";
+        };
+        /**
+         * SenderProfileIn
+         * @description Bounded on the way in; the service cleans and validates further.
+         */
+        SenderProfileIn: {
+            /** Display Name */
+            display_name: string;
+            /** Postal Address */
+            postal_address?: string | null;
+            /** Reply To */
+            reply_to?: string | null;
+            /** Signature Text */
+            signature_text?: string | null;
+            /** Website */
+            website?: string | null;
+        };
+        /** SenderProfileOut */
+        SenderProfileOut: {
+            /** Display Name */
+            display_name: string;
+            /** Postal Address */
+            postal_address: string | null;
+            /** Reply To */
+            reply_to: string | null;
+            /** Signature Text */
+            signature_text: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Website */
+            website: string | null;
+        };
+        /** SenderProfilesResponse */
+        SenderProfilesResponse: {
+            /** Profiles */
+            profiles: components["schemas"]["ProfileSlot"][];
         };
         /** TestResponse */
         TestResponse: {
@@ -536,6 +703,119 @@ export interface operations {
             };
             /** @description Authentication is not available (fails closed) */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_policies_api_v1_settings_policies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PoliciesResponse"];
+                };
+            };
+        };
+    };
+    patch_policy_api_v1_settings_policies__country__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                country: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyOut"];
+                };
+            };
+            /** @description No policy for that country */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The change loosens the policy and was not acknowledged */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_sender_profiles_api_v1_settings_sender_profiles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SenderProfilesResponse"];
+                };
+            };
+        };
+    };
+    put_sender_profile_api_v1_settings_sender_profiles__mode__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mode: components["schemas"]["CampaignMode"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SenderProfileIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileSlot"];
+                };
+            };
+            /** @description A field is not acceptable; ``details.field`` says which */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

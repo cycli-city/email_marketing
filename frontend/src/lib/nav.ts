@@ -1,4 +1,4 @@
-import { Activity, Plug, type LucideIcon } from "lucide-react";
+import { Activity, Plug, ShieldCheck, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   title: string;
@@ -22,6 +22,9 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Settings",
-    items: [{ title: "Integrations", href: "/settings/integrations", icon: Plug }],
+    items: [
+      { title: "Integrations", href: "/settings/integrations", icon: Plug },
+      { title: "Sending", href: "/settings/sending", icon: ShieldCheck },
+    ],
   },
 ];

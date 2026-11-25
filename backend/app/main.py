@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app import __version__
-from app.api import gmail, health, me
+from app.api import gmail, health, me, unsubscribe
+from app.api import settings as settings_api
 from app.api.errors import install_error_handlers
 from app.auth.jwks import JwksCache
 from app.auth.provisioning import OwnerDirectory
@@ -211,6 +212,8 @@ def create_app(
     app.include_router(health.router)
     app.include_router(me.router)
     app.include_router(gmail.router)
+    app.include_router(settings_api.router)
+    app.include_router(unsubscribe.router)
     return app
 
 

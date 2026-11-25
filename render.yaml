@@ -1,0 +1,110 @@
+# Render Blueprint - two always-on web services (docs/DEPLOYMENT.md, ADR-041).
+#
+#   aoi-api        FastAPI backend + the in-process queue worker and mailbox scheduler (ADR-037). It must be ALWAYS ON: a free
+#                  instance sleeps after 15 minutes without traffic, which would stop reply-reading and every scheduled job.
+#   aoi-dashboard  Next.js dashboard (server-rendered; holds the session cookie and proxies API calls, ADR-033).
+#
+# No secret is stored here. Every `sync: false` variable is entered once in the Render dashboard (bulk-paste the matching
+# `.local/RENDER_*_ENV.local.env` file that scripts/make_render_env.py generates; it is gitignored).
+# The database is Supabase Postgres (not on Render): use the *pooler* connection string in session mode (port 5432), because
+# Render is IPv4-only and Supabase's direct address is IPv6-only.
+
+services:
+  - type: web
+    name: aoi-api
+    runtime: python
+    plan: starter
+    region: singapore # closest to the Supabase project (Mumbai)
+    rootDir: backend
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    preDeployCommand: uv run alembic upgrade head
+    startCommand: uv run uvicorn app.main:app_factory --factory --host 0.0.0.0 --port $PORT
+    healthCheckPath: /readyz
+    autoDeploy: false # deploys are deliberate; CI must be green first
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: APP_ENV
+        value: production
+      - key: APP_ROLE
+        value: all
+      - key: AOI_DISABLE_DOTENV
+        value: "1"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: BACKEND_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: OWNER_EMAILS
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: HUNTER_API_KEY
+        sync: false
+      - key: GEOAPIFY_API_KEY
+        sync: false
+      - key: FIRECRAWL_API_KEY
+        sync: false
+      - key: VERIFALIA_USERNAME
+        sync: false
+      - key: VERIFALIA_PASSWORD
+        sync: false
+      - key: MAILBOXVALIDATOR_API_KEY
+        sync: false
+      - key: ZEROBOUNCE_API_KEY
+        sync: false
+      - key: ABSTRACT_EMAIL_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: BRAVE_SEARCH_API_KEY
+        sync: false
+      - key: PDL_API_KEY
+        sync: false
+      - key: COMPANIES_HOUSE_API_KEY
+        sync: false
+      - key: ADZUNA_APP_ID
+        sync: false
+      - key: ADZUNA_APP_KEY
+        sync: false
+      - key: JOOBLE_API_KEY
+        sync: false
+
+  - type: web
+    name: aoi-dashboard
+    runtime: node
+    plan: starter
+    region: singapore
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start -- -H 0.0.0.0 -p $PORT
+    healthCheckPath: /login
+    autoDeploy: false
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: APP_URL
+        sync: false

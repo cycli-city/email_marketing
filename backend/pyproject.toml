@@ -90,7 +90,7 @@ files = ["app", "tests"]
 exclude = ["migrations/"]
 
 [[tool.mypy.overrides]]
-module = ["tldextract.*", "protego.*", "nh3.*", "asyncpg.*"]
+module = ["tldextract.*", "protego.*", "nh3.*", "asyncpg.*", "yaml.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

@@ -8,3 +8,5 @@
 e4e7dd6f50f876a142e15b01e9161ed21c9cd81e:backend/tests/unit/test_gmail_mime.py:generic-api-key:27
 # 4) A fixed hex string passed as the search token in a unit test of the Gmail client (not a credential).
 3e9c5280e2ea95355f8ec4e24109b39f6710df95:backend/tests/unit/test_gmail_api.py:generic-api-key:261
+# 5) The header of an unsigned ("alg":"none") token, one of the garbage inputs that unsubscribe-link verification must refuse (not a credential).
+b1751e82e07abe989b86df3dfb8770e26692d9e7:backend/tests/unit/test_unsubscribe_links.py:generic-api-key:91

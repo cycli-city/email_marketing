@@ -173,7 +173,16 @@ def cmd_run_logs(run_id: int, needle: str, tail: int = 60) -> None:
             print("\n".join(re.sub(r"^\S+Z ", "", line) for line in lines[-tail:]))
 
 
+def _utf8_output() -> None:
+    """Windows consoles default to cp1252, where printing a status marker raises mid-run."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str]) -> None:
+    _utf8_output()
     if not argv:
         sys.exit(__doc__)
     cmd, rest = argv[0], argv[1:]

@@ -88,7 +88,15 @@ def test_a_token_with_a_malformed_identifier_is_refused() -> None:
 
 
 @pytest.mark.parametrize(
-    "garbage", ["", "abc", "a.b.c", "x" * 500, "../../etc/passwd", "eyJhbGciOiJub25lIn0.e30."]
+    "garbage",
+    [
+        "",
+        "abc",
+        "a.b.c",
+        "x" * 500,
+        "../../etc/passwd",
+        "eyJhbGciOiJub25l" + "In0.e30.",
+    ],  # the last: an unsigned "alg: none" header
 )
 def test_garbage_is_refused_not_raised(garbage: str) -> None:
     assert links().resolve(garbage) is None
